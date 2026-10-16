@@ -39,12 +39,31 @@ describe('cards and deal', () => {
     expect(new Set(deck.map((c) => c.id)).size).toBe(52);
   });
 
-  it.each([4, 5, 6, 7])('deals 52 distinct cards across %i seats, sizes differ by at most one', (n) => {
+  it.each([
+    [4, 13, 0],
+    [5, 10, 2],
+    [6, 8, 4],
+    [7, 7, 3],
+  ])('deals fairly with %i seats: %i cards each, %i sit out', (n, perSeat, aside) => {
     const m = new Match({ numSeats: n, rng: mulberry32(n) });
     const sizes = m.seats.map((s) => s.hand.length);
-    expect(sizes.reduce((a, b) => a + b, 0)).toBe(52);
-    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
-    expect(new Set(allCardIds(m)).size).toBe(52);
+    expect(sizes.every((s) => s === perSeat)).toBe(true);
+    expect(m.setAside).toHaveLength(aside);
+    const dealtIds = allCardIds(m);
+    expect(new Set(dealtIds).size).toBe(dealtIds.length); // no duplicates
+    // The A-spades is always in play — someone must open with it.
+    expect(dealtIds).toContain('A-spades');
+    expect(m.setAside.some((c) => c.id === 'A-spades')).toBe(false);
+  });
+
+  it('keeps the A-spades in play across many shuffles', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      for (const n of [5, 6, 7]) {
+        const m = new Match({ numSeats: n, rng: mulberry32(seed * 100 + n) });
+        expect(allCardIds(m)).toContain('A-spades');
+        expect(m.setAside.some((c) => c.id === 'A-spades')).toBe(false);
+      }
+    }
   });
 
   it('rotates the dealer', () => {
@@ -64,6 +83,30 @@ describe('opening', () => {
     const r = m.playCard(opener, 'A-spades');
     expect(r.thulla).toBe(false);
     expect(m.trick?.ledSuit).toBe('spades');
+  });
+
+  it('the A-spades opening trick can never Thulla (protected by default)', () => {
+    const m = new Match({
+      numSeats: 4,
+      preDeal: [
+        [C('A', 'spades'), C('9', 'hearts')],
+        [C('5', 'clubs'), C('6', 'clubs')],
+        [C('7', 'hearts'), C('7', 'clubs')],
+        [C('8', 'hearts'), C('8', 'clubs')],
+      ],
+    });
+    expect(m.rules.opening).toBe('protected');
+    expect(m.turnSeat()).toBe(0);
+    m.playCard(0, 'A-spades');
+    const r1 = m.playCard(1, '5-clubs'); // no spades — still no Thulla
+    expect(r1.thulla).toBe(false);
+    expect(r1.trickComplete).toBe(false);
+    m.playCard(2, '7-hearts');
+    const r3 = m.playCard(3, '8-hearts');
+    expect(r3.trickComplete).toBe(true);
+    expect(r3.thulla).toBe(false);
+    // A-spades player leads the next trick.
+    expect(m.turnSeat()).toBe(0);
   });
 });
 
@@ -305,14 +348,15 @@ describe('validation', () => {
 });
 
 describe('card conservation', () => {
-  it('hands + current trick + discard always hold exactly 52 distinct cards', () => {
+  it('hands + current trick + discard + set-aside always hold exactly 52 distinct cards', () => {
     const m = new Match({ numSeats: 5, rng: mulberry32(99) });
     const rng = mulberry32(7);
     for (let i = 0; i < 500 && m.phase !== 'finished'; i++) {
       const seat = m.turnSeat() as number;
       const card = normalBot(observe(m, seat));
       m.playCard(seat, card.id);
-      expect(new Set(allCardIds(m)).size).toBe(52);
+      const all = [...allCardIds(m), ...m.setAside.map((c) => c.id)];
+      expect(new Set(all).size).toBe(52);
     }
   });
 });

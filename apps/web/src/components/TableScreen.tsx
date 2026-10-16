@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Pause,
@@ -11,9 +11,19 @@ import {
   Layers,
   LogOut,
   ChevronLeft,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { rankValue } from '@bhabi-thulla/game-engine';
 import { TableState, TURN_SECONDS, GameSpeed, SPEEDS } from '../game/useTable';
+import {
+  clickSound,
+  playCardSound,
+  thullaSound,
+  turnSound,
+  isMuted,
+  setMuted,
+} from '../game/sound';
 import { CardView } from './CardView';
 
 interface Props {
@@ -26,6 +36,14 @@ interface Props {
 }
 
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
+
+const SUIT_GLYPH: Record<string, string> = {
+  spades: '♠',
+  hearts: '♥',
+  diamonds: '♦',
+  clubs: '♣',
+};
+const RED_SUITS = new Set(['hearts', 'diamonds']);
 
 /**
  * Seat positions on the ELLIPSE table, as fractions of the table box.
@@ -40,7 +58,12 @@ function seatPos(seat: number, numSeats: number): { x: number; y: number } {
 /** Offset of a played card from the table centre, towards its player's seat. */
 function trickOffset(seat: number, numSeats: number): { x: number; y: number } {
   const angle = ((90 - (seat * 360) / numSeats) * Math.PI) / 180;
-  return { x: 12 * Math.cos(angle), y: 15 * Math.sin(angle) };
+  return { x: 16 * Math.cos(angle), y: 20 * Math.sin(angle) };
+}
+
+/** Seat angle in degrees on the table ellipse (90° = bottom, seat 0). */
+function seatAngleDeg(seat: number, numSeats: number): number {
+  return 90 - (seat * 360) / numSeats;
 }
 
 function SeatPod({
@@ -118,7 +141,10 @@ function ToolButton({
       type="button"
       title={title}
       aria-label={title}
-      onClick={onClick}
+      onClick={() => {
+        clickSound();
+        onClick();
+      }}
       className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95"
     >
       {children}
@@ -201,6 +227,26 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
   );
 
   const myTurn = turn === 0 && match.phase !== 'finished';
+  const [soundOff, setSoundOff] = useState(isMuted());
+  const prevMyTurn = useRef(false);
+
+  const toggleMute = () => {
+    const next = !soundOff;
+    setMuted(next);
+    setSoundOff(next);
+    if (!next) clickSound();
+  };
+
+  // Cheeky womp whenever a Thulla lands.
+  useEffect(() => {
+    if (table.thullaFlash) thullaSound();
+  }, [table.thullaFlash]);
+
+  // Gentle chime when the turn comes to you.
+  useEffect(() => {
+    if (myTurn && !paused && !prevMyTurn.current) turnSound();
+    prevMyTurn.current = myTurn && !paused;
+  }, [myTurn, paused]);
   const ledSuit = displayLedSuit;
   const mustFollow = ledSuit !== null && me.hand.some((c) => c.suit === ledSuit);
   const hint = !myTurn
@@ -235,9 +281,30 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
 
   const thullaActive = !!table.thullaFlash && !paused;
 
+  // Turn-flow arrow: a near-full ellipse hugging the wooden rim, with its
+  // arrowhead landing exactly on the active seat — the flow visibly points at
+  // whose turn it is.
+  const activeSeat = turn !== null && match.phase !== 'finished' ? turn : null;
+  const ARX = 134;
+  const ARY = 93;
+  const ACX = 145;
+  const ACY = 100;
+  const flowArc = (() => {
+    if (activeSeat === null || paused) return null;
+    const endDeg = seatAngleDeg(activeSeat, match.numSeats);
+    const startDeg = endDeg + 300; // 300° of travel, ending at the active seat
+    const rad = (d: number) => (d * Math.PI) / 180;
+    const sx = ACX + ARX * Math.cos(rad(startDeg));
+    const sy = ACY + ARY * Math.sin(rad(startDeg));
+    const ex = ACX + ARX * Math.cos(rad(endDeg));
+    const ey = ACY + ARY * Math.sin(rad(endDeg));
+    return `M ${sx.toFixed(1)} ${sy.toFixed(1)} A ${ARX} ${ARY} 0 1 0 ${ex.toFixed(1)} ${ey.toFixed(1)}`;
+  })();
+
   const tryPlay = (cardId: string) => {
     if (!myTurn || paused) return;
     if (legalIds.has(cardId)) {
+      playCardSound();
       table.playCard(0, cardId);
     } else {
       table.notify(illegalReason ?? 'Not your turn.');
@@ -252,6 +319,7 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
       <header className="h-12 shrink-0 z-30 flex items-center gap-2 px-3 border-b border-white/10 bg-black/40 backdrop-blur">
         <Link
           to="/"
+          onClick={() => clickSound()}
           className="flex items-center gap-0.5 text-emerald-100/70 text-sm font-semibold hover:text-amber-200 whitespace-nowrap"
         >
           <ChevronLeft size={16} />
@@ -266,7 +334,8 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
         </p>
 
         {/* Turn indicator */}
-        <div aria-live="polite" className="flex-1 flex justify-center min-w-0">
+        {/* Turn indicator + led-suit badge (header: nothing can overlap it here) */}
+        <div aria-live="polite" className="flex-1 flex justify-center items-center gap-2 min-w-0">
           {match.phase === 'finished' ? (
             <span className="text-emerald-100/60 text-xs font-semibold">Round over</span>
           ) : myTurn && !paused ? (
@@ -276,6 +345,17 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
           ) : (
             <span className="rounded-full border border-emerald-700/60 bg-emerald-950/60 px-4 py-1 text-emerald-100/80 text-xs font-semibold truncate max-w-full">
               {paused ? 'Paused' : `${turnName}'s turn…`}
+            </span>
+          )}
+          {ledSuit && displayPlays.length > 0 && match.phase !== 'finished' && (
+            <span
+              title={`Led suit: ${ledSuit}${showingCompleted ? ' (trick complete)' : ''}`}
+              className="rounded-full border border-amber-200/30 bg-black/40 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap"
+            >
+              <span className={RED_SUITS.has(ledSuit) ? 'text-red-300' : 'text-amber-100'}>
+                {SUIT_GLYPH[ledSuit]}
+              </span>{' '}
+              <span className="text-amber-200/90 capitalize">{ledSuit}</span>
             </span>
           )}
         </div>
@@ -309,7 +389,10 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
                 title={`${SPEEDS[s].label} pace`}
                 aria-label={`${SPEEDS[s].label} pace`}
                 aria-pressed={speed === s}
-                onClick={() => onSpeedChange(s)}
+                onClick={() => {
+                  clickSound();
+                  onSpeedChange(s);
+                }}
                 className={`rounded-md p-1.5 transition active:scale-95 ${
                   speed === s
                     ? 'bg-amber-300 text-emerald-950 shadow'
@@ -321,6 +404,18 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
             ))}
           </div>
 
+          {/* Sound toggle */}
+          <button
+            type="button"
+            title={soundOff ? 'Unmute sounds' : 'Mute sounds'}
+            aria-label={soundOff ? 'Unmute sounds' : 'Mute sounds'}
+            aria-pressed={!soundOff}
+            onClick={toggleMute}
+            className="rounded-lg border border-white/10 bg-white/5 p-2 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95"
+          >
+            {soundOff ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+
           <div className="w-px h-5 bg-white/10" aria-hidden />
           <ToolButton title="Back to table setup" label="New table" onClick={onLeave}>
             <Layers size={14} />
@@ -329,6 +424,7 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
             to="/"
             title="Quit to playground"
             aria-label="Quit to playground"
+            onClick={() => clickSound()}
             className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-bold text-emerald-100/85 transition hover:border-red-300/40 hover:bg-red-950/40 hover:text-red-200 active:scale-95"
           >
             <LogOut size={14} />
@@ -365,34 +461,37 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
                 <div className="absolute inset-6 sm:inset-8 rounded-[50%] border border-amber-200/15" />
               </div>
 
-              {/* Animated turn-flow arrow (anticlockwise) */}
-              <svg
-                className="absolute inset-0 h-full w-full pointer-events-none opacity-25"
-                viewBox="0 0 290 200"
-                aria-hidden
-              >
-                <defs>
-                  <marker
-                    id="flow-arrow"
-                    markerWidth="7"
-                    markerHeight="7"
-                    refX="5"
-                    refY="3.5"
-                    orient="auto"
-                  >
-                    <path d="M0,0 L7,3.5 L0,7 z" fill="#fcd34d" />
-                  </marker>
-                </defs>
-                <path
-                  d="M 136 181.4 A 122 82 0 1 0 154 181.4"
-                  fill="none"
-                  stroke="#fcd34d"
-                  strokeWidth="1.6"
-                  strokeDasharray="10 8"
-                  markerEnd="url(#flow-arrow)"
-                  className="flow-dash"
-                />
-              </svg>
+              {/* Turn-flow arrow: hugs the oval rim, arrowhead lands on the active seat */}
+              {flowArc && (
+                <svg
+                  className="absolute inset-0 h-full w-full pointer-events-none opacity-30"
+                  viewBox="0 0 290 200"
+                  aria-hidden
+                >
+                  <defs>
+                    <marker
+                      id="flow-arrow"
+                      markerWidth="7"
+                      markerHeight="7"
+                      refX="5"
+                      refY="3.5"
+                      orient="auto"
+                    >
+                      <path d="M0,0 L7,3.5 L0,7 z" fill="#fcd34d" />
+                    </marker>
+                  </defs>
+                  <path
+                    d={flowArc}
+                    fill="none"
+                    stroke="#fcd34d"
+                    strokeWidth="1.8"
+                    strokeDasharray="10 8"
+                    strokeLinecap="round"
+                    markerEnd="url(#flow-arrow)"
+                    className="flow-dash"
+                  />
+                </svg>
+              )}
 
               {/* Thulla flash banner */}
               {thullaActive && (
@@ -406,41 +505,34 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
 
               {/* Trick cards at the centre, fanned towards each player */}
               <div className="absolute inset-0 pointer-events-none">
-                {displayPlays.length > 0 ? (
-                  displayPlays.map((p, i) => {
-                    const o = trickOffset(p.seat, match.numSeats);
-                    const rot = (i - (displayPlays.length - 1) / 2) * 9;
-                    return (
-                      <div
-                        key={`${p.seat}-${p.card.id}`}
-                        className="absolute"
-                        style={{
-                          left: `${50 + o.x}%`,
-                          top: `${50 + o.y}%`,
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: 10 + i,
-                        }}
-                      >
-                        <div className="play-in">
-                          <div style={{ transform: `rotate(${rot}deg)` }}>
-                            <CardView card={p.card} small />
-                            <span className="absolute left-1/2 top-full mt-0.5 -translate-x-1/2 whitespace-nowrap rounded bg-black/65 px-1.5 py-px text-[9px] font-semibold text-amber-100/90">
-                              {match.seats[p.seat].name}
-                            </span>
-                          </div>
+                {displayPlays.map((p, i) => {
+                  const o = trickOffset(p.seat, match.numSeats);
+                  const rot = (i - (displayPlays.length - 1) / 2) * 7;
+                  return (
+                    <div
+                      key={`${p.seat}-${p.card.id}`}
+                      className="absolute"
+                      style={{
+                        left: `${50 + o.x}%`,
+                        top: `${50 + o.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 10 + i,
+                      }}
+                    >
+                      <div className="play-in">
+                        <div style={{ transform: `rotate(${rot}deg) scale(0.94)` }}>
+                          <CardView card={p.card} small />
+                          <span className="absolute left-1/2 top-full mt-0.5 -translate-x-1/2 whitespace-nowrap rounded bg-black/65 px-1.5 py-px text-[9px] font-semibold text-amber-100/90">
+                            {match.seats[p.seat].name}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })
-                ) : (
+                    </div>
+                  );
+                })}
+                {displayPlays.length === 0 && (
                   <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-emerald-100/50 text-sm px-8 text-center whitespace-nowrap">
                     {match.isFirstTrick ? 'Waiting for the A♠ opening…' : 'Waiting for the lead…'}
-                  </p>
-                )}
-                {ledSuit && displayPlays.length > 0 && (
-                  <p className="absolute left-1/2 top-[72%] -translate-x-1/2 whitespace-nowrap rounded-full bg-black/55 border border-white/10 px-3 py-0.5 text-emerald-100/80 text-[11px]">
-                    Led suit: <span className="font-bold text-amber-200 capitalize">{ledSuit}</span>
-                    {showingCompleted && <span className="text-emerald-100/50"> · trick complete</span>}
                   </p>
                 )}
               </div>
@@ -470,7 +562,10 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
                   <p className="text-emerald-100/60 text-sm mb-4">Take your time.</p>
                   <button
                     type="button"
-                    onClick={() => table.togglePause()}
+                    onClick={() => {
+                      clickSound();
+                      table.togglePause();
+                    }}
                     className="flex items-center gap-2 rounded-xl bg-amber-300 px-6 py-2.5 font-black text-emerald-950 hover:bg-amber-200 active:scale-95 transition"
                   >
                     <Play size={16} /> Resume

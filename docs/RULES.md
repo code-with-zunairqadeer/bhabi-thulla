@@ -1,4 +1,4 @@
-# Bhabi Thulla — Rules Contract (Classic preset, version `classic-1`)
+# Bhabi Thulla — Rules Contract (Protected-opening preset, version `protected-1`)
 
 > Proposed defaults. Visible and versioned per the product brief; household
 > confirmation can adjust them before launch. Each match records its ruleset version.
@@ -13,30 +13,32 @@
 >   voids), and documents household variants: protected opening round, asking
 >   for hands, playing into a stopped round, and a two-player shoot-out.
 >
-> This implementation follows the product brief's Classic preset: the brief
-> explicitly excludes hand-asking, playing into stopped rounds, and shoot-outs.
-> The protected-opening variant is implemented and configurable because
-> bhabhi.asia plays it as standard.
+> This implementation plays the **protected opening as standard**: the A-spades
+> opening trick can never Thulla — it always runs through every participant.
+> The brief explicitly excludes hand-asking, playing into stopped rounds, and
+> shoot-outs. The classic opening (Thulla allowed on the first trick) remains
+> implemented and configurable as `CLASSIC_RULES`.
 
 ## Setup
 
 - 4–7 seats per table, one standard 52-card deck, no jokers, no partnerships.
 - Rank order: A > K > Q > J > 10 > 9 > … > 2. **No suit is trump.**
-- Deal one card at a time starting with the seat after the dealer, until all 52
-  are distributed. Hand sizes differ by at most one card (extra cards go to the
-  earliest seats in deal order).
+- Deal one card at a time starting with the seat after the dealer. Every seat
+  receives exactly ⌊52 / seats⌋ cards — 13 at 4 seats, 10 at 5, 8 at 6, 7 at 7.
+  Leftover cards sit out of the deal (the A-spades is always kept in play, so
+  someone can open with it).
 - Dealer rotates clockwise each match.
 - Play proceeds clockwise.
 
 ## The opening
 
 - The player holding the **A-spades must open with that exact card**.
-- **Classic:** the opening trick follows normal Thulla rules — an off-suit play
-  ends it immediately.
-- **Protected Opening (variant):** the opening trick always runs through every
-  participant even if someone cannot follow spades. The whole trick is discarded
-  and the A-spades player leads next (unless they escaped, then lead passes
-  clockwise to the next active player).
+- **Protected opening (standard):** the opening trick always runs through every
+  participant even if someone cannot follow spades — it can never Thulla. The
+  whole trick is discarded and the A-spades player leads next (unless they
+  escaped, then lead passes clockwise to the next active player).
+- **Classic (configurable variant):** the opening trick follows normal Thulla
+  rules — an off-suit play ends it immediately.
 
 ## Trick play
 

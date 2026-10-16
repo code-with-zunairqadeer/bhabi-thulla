@@ -7,7 +7,7 @@ import {
   Card, Suit, createDeck, shuffle, isAceOfSpades, Rng,
 } from './cards.js';
 import {
-  RulesConfig, CLASSIC_RULES, TrickPlay, legalPlays, trickWinnerSeat,
+  RulesConfig, PROTECTED_OPENING_RULES, TrickPlay, legalPlays, trickWinnerSeat,
 } from './rules.js';
 
 export interface Seat {
@@ -69,6 +69,8 @@ export class Match {
   readonly dealer: number;
   trick: TrickState | null = null;
   discardPile: Card[] = [];
+  /** Cards left out of the deal so every seat holds an exactly equal hand. */
+  setAside: Card[] = [];
   phase: MatchPhase = 'awaiting_action';
   bhabi: number | null = null;
   draw = false;
@@ -89,7 +91,7 @@ export class Match {
     const { numSeats } = opts;
     if (numSeats < 4 || numSeats > 7) throw new Error('numSeats must be 4-7');
     this.numSeats = numSeats;
-    this.rules = opts.rules ?? CLASSIC_RULES;
+    this.rules = opts.rules ?? PROTECTED_OPENING_RULES;
     this.dealer = opts.dealer ?? 0;
     this.seats = Array.from({ length: numSeats }, (_, i) => ({
       name: opts.names?.[i] ?? `Player ${i + 1}`,
@@ -102,7 +104,7 @@ export class Match {
       if (opts.preDeal.length !== numSeats) throw new Error('preDeal must cover every seat');
       opts.preDeal.forEach((hand, i) => { this.seats[i].hand = [...hand]; });
     } else {
-      this.deal(shuffle(createDeck(), opts.rng));
+      this.deal(shuffle(createDeck(), opts.rng), opts.rng);
     }
 
     const opener = this.seats.findIndex((s) => s.hand.some(isAceOfSpades));
@@ -110,12 +112,34 @@ export class Match {
     this.startTrick(opener);
   }
 
-  /** Deal one card at a time, starting with the seat after the dealer. */
-  private deal(deck: Card[]): void {
+  /**
+   * Deal fairly: every seat receives exactly floor(52 / numSeats) cards, one
+   * at a time starting with the seat after the dealer. Leftover cards sit out
+   * of the deal — except the A-spades, which is always kept in play, because
+   * someone must open with it.
+   */
+  private deal(deck: Card[], rng?: Rng): void {
+    const perSeat = Math.floor(deck.length / this.numSeats);
+    const inPlay = deck.slice(0, perSeat * this.numSeats);
+    this.setAside = deck.slice(perSeat * this.numSeats);
+    const aceOut = this.setAside.findIndex(isAceOfSpades);
+    if (aceOut !== -1) {
+      const roll = rng ?? Math.random;
+      const swapIdx = Math.floor(roll() * inPlay.length);
+      const ace = this.setAside[aceOut];
+      this.setAside[aceOut] = inPlay[swapIdx];
+      inPlay[swapIdx] = ace;
+    }
     let i = 0;
-    for (const card of deck) {
+    for (const card of inPlay) {
       this.seats[(this.dealer + 1 + i) % this.numSeats].hand.push(card);
       i++;
+    }
+    if (this.setAside.length > 0) {
+      const n = this.setAside.length;
+      this.events.push(
+        `${n} card${n === 1 ? '' : 's'} sit${n === 1 ? 's' : ''} out — everyone holds ${perSeat}.`,
+      );
     }
   }
 
