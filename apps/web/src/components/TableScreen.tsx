@@ -190,14 +190,11 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
                   card={c}
                   legal={myTurn && legal}
                   dimmed={myTurn && !legal}
-                  onClick={
-                    myTurn
-                      ? () =>
-                          legal
-                            ? table.playCard(0, c.id)
-                            : table.notify(illegalReason ?? 'Not your turn.')
-                      : undefined
-                  }
+                  onClick={() => {
+                    if (!myTurn) return;
+                    if (legal) table.playCard(0, c.id);
+                    else table.notify(illegalReason ?? 'Not your turn.');
+                  }}
                 />
               </div>
             );
