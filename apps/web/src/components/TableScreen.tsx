@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { SUITS, rankValue } from '@bhabi-thulla/game-engine';
 import { TableState, TURN_SECONDS } from '../game/useTable';
 import { CardView } from './CardView';
@@ -12,16 +11,14 @@ interface Props {
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
 
 export function TableScreen({ table, nickname, onLeave }: Props) {
-  const { match, turn, legalIds, selectedId, secondsLeft, lastResult, error, events } = table;
+  const { match, turn, legalIds, selectedId, secondsLeft, error, events } = table;
   const me = match.seats[0];
   const trick = match.trick;
 
-  const sortedHand = useMemo(
-    () =>
-      [...me.hand].sort(
-        (a, b) => SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit] || rankValue(b.rank) - rankValue(a.rank),
-      ),
-    [me.hand],
+  // Sort the live hand on every render. The engine mutates hand arrays in
+  // place, so memoizing on the array reference would show stale cards.
+  const sortedHand = [...me.hand].sort(
+    (a, b) => SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit] || rankValue(b.rank) - rankValue(a.rank),
   );
 
   const myTurn = turn === 0 && match.phase !== 'finished';

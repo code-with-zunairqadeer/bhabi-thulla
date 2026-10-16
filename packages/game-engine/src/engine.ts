@@ -209,10 +209,15 @@ export class Match {
 
     // Protected opening: the whole opening trick is discarded and the
     // A-spades player leads next (unless they escaped).
-    const nextLeader = (this.isFirstTrick && this.rules.opening === 'protected')
+    const isProtectedOpening = this.isFirstTrick && this.rules.opening === 'protected';
+    const nextLeader = isProtectedOpening
       ? t.leader
       : trickWinnerSeat(t.plays, t.ledSuit as Suit);
-    this.events.push(`${this.seats[nextLeader].name} leads next.`);
+    if (isProtectedOpening) {
+      this.events.push(`${this.seats[t.leader].name} leads next (protected opening).`);
+    } else {
+      this.events.push(`${this.seats[nextLeader].name} wins the trick and leads next.`);
+    }
     this.finishTrick(nextLeader, result);
   }
 
