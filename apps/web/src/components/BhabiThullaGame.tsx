@@ -12,10 +12,12 @@ function TableRoute({
   config,
   onFinish,
   onLeave,
+  onRematch,
 }: {
   config: TableConfig;
   onFinish: (m: Match) => void;
   onLeave: () => void;
+  onRematch: () => void;
 }) {
   const table = useTable(config);
   const finished = table.match.phase === 'finished';
@@ -27,7 +29,7 @@ function TableRoute({
     }
   }, [finished, onFinish, table.match]);
 
-  return <TableScreen table={table} nickname={config.nickname} onLeave={onLeave} />;
+  return <TableScreen table={table} nickname={config.nickname} onLeave={onLeave} onRematch={onRematch} />;
 }
 
 /** Bhabi Thulla inside the playground: setup → table → results. */
@@ -61,7 +63,7 @@ export function BhabiThullaGame() {
   }, []);
 
   if (screen === 'table' && config) {
-    return <TableRoute key={gameKey} config={config} onFinish={finish} onLeave={goSetup} />;
+    return <TableRoute key={gameKey} config={config} onFinish={finish} onLeave={goSetup} onRematch={rematch} />;
   }
   if (screen === 'results' && finalMatch) {
     return <ResultsScreen match={finalMatch} onRematch={rematch} onHome={goSetup} />;

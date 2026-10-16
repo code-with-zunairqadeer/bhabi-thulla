@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SUITS, rankValue } from '@bhabi-thulla/game-engine';
 import { TableState, TURN_SECONDS } from '../game/useTable';
@@ -7,6 +8,7 @@ interface Props {
   table: TableState;
   nickname: string;
   onLeave: () => void;
+  onRematch: () => void;
 }
 
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
@@ -88,8 +90,57 @@ function SeatPod({
   );
 }
 
-export function TableScreen({ table, nickname, onLeave }: Props) {
-  const { match, turn, legalIds, secondsLeft, error, events, completedTrick } = table;
+const RULES = [
+  ['Goal', 'Get rid of every card. The last player still holding cards is the Bhabi — and loses.'],
+  ['Opening', 'Whoever holds the A♠ starts and must play it first.'],
+  ['Follow suit', 'The leader plays any card. Everyone else must play the led suit if they have one.'],
+  ['Thulla', "Can't follow? Play any card — that's a Thulla! The trick stops dead on the spot."],
+  ['Pickup', 'Whoever played the highest card of the led suit picks up the whole pile and leads next.'],
+  ['Clean trick', 'If everyone follows, the cards are discarded and the highest card leads next.'],
+  ['Escape', 'Play your last card and you escape, safe. Watch who is void in which suit — good players remember!'],
+];
+
+function RulesModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="How to play"
+    >
+      <div
+        className="panel rounded-2xl max-w-md w-full p-6 max-h-[85dvh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-black text-amber-100">How to play</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-emerald-100/60 hover:text-amber-200 text-xl px-2"
+            aria-label="Close rules"
+          >
+            ✕
+          </button>
+        </div>
+        <ul className="space-y-3">
+          {RULES.map(([title, body]) => (
+            <li key={title} className="text-sm">
+              <p className="font-bold text-amber-200">{title}</p>
+              <p className="text-emerald-100/70">{body}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+export function TableScreen({ table, nickname, onLeave, onRematch }: Props) {
+  const { match, turn, legalIds, secondsLeft, paused, error, events, completedTrick } = table;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const me = match.seats[0];
   const trick = match.trick;
 
@@ -140,10 +191,12 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
           ? { title: '🟢 Your turn', sub: hint ?? 'Tap a highlighted card.' }
           : { title: `🃏 ${turnName}'s turn`, sub: 'Waiting for their card…' };
 
+  const closeMenu = () => setMenuOpen(false);
+
   return (
     <div className="felt h-dvh flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="h-12 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-5 border-b border-emerald-800/60 bg-emerald-950/40 backdrop-blur">
+      <header className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-5 border-b border-amber-200/10 bg-black/30 backdrop-blur">
         <Link
           to="/"
           className="text-emerald-100/70 text-sm font-semibold hover:text-amber-200 px-1 py-1 whitespace-nowrap"
@@ -163,61 +216,87 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onLeave}
-          className="text-emerald-100/70 text-sm font-semibold hover:text-amber-200 px-2 py-1 whitespace-nowrap"
-          aria-label="Leave table"
-        >
-          Leave →
-        </button>
-      </header>
-      {/* Credit strip — its own row, never behind the table */}
-      <div className="h-7 shrink-0 flex items-center justify-center border-b border-emerald-800/40 bg-black/20">
-        <p className="text-emerald-100/50 text-[11px] tracking-wide">
-          Bhabi Thulla · Practice table · {match.numSeats} seats ·{' '}
-          <span className="text-amber-200/80 font-semibold">Developed by Zunair Qadeer</span>
+        <p className="hidden md:block text-[11px] text-emerald-100/45 whitespace-nowrap">
+          Developed by <span className="text-amber-200/80 font-semibold">Zunair Qadeer</span>
         </p>
-      </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            className="rounded-lg border border-emerald-700/60 bg-emerald-950/60 px-3 py-1.5 text-sm font-bold text-emerald-100 hover:border-amber-300/60 hover:text-amber-200"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="Game menu"
+          >
+            ☰
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={closeMenu} aria-hidden />
+              <div
+                className="absolute right-0 top-11 z-40 w-52 panel rounded-xl p-1.5"
+                role="menu"
+              >
+                {(
+                  [
+                    [paused ? '▶ Resume' : '⏸ Pause', () => table.togglePause()],
+                    ['🔄 Restart round', () => onRematch()],
+                    ['❓ How to play', () => setRulesOpen(true)],
+                    ['🃏 New table', () => onLeave()],
+                  ] as [string, () => void][]
+                ).map(([label, fn]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      closeMenu();
+                      fn();
+                    }}
+                    className="w-full text-left rounded-lg px-3 py-2 text-sm font-semibold text-emerald-100/85 hover:bg-emerald-800/60 hover:text-amber-100"
+                  >
+                    {label}
+                  </button>
+                ))}
+                <Link
+                  to="/"
+                  role="menuitem"
+                  className="block rounded-lg px-3 py-2 text-sm font-semibold text-emerald-100/85 hover:bg-emerald-800/60 hover:text-amber-100"
+                >
+                  🏠 Quit to playground
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
+      </header>
 
       {/* Main row: table + instruction panel */}
       <div className="flex-1 min-h-0 flex">
         {/* Round table */}
-        <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center px-2 py-4">
+        <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center px-2 py-2 relative">
           <div
             className="relative"
-            style={{ width: 'min(calc(100% - 0.5rem), calc(100dvh - 19rem))', aspectRatio: '1 / 1' }}
+            style={{ width: 'min(calc(100% - 0.5rem), calc(100dvh - 14rem))', aspectRatio: '1 / 1' }}
           >
             {/* Wooden rim */}
             <div className="table-rim absolute -inset-3 sm:-inset-4 rounded-full" aria-hidden />
-            {/* Felt */}
+            {/* Felt with overhead spotlight */}
             <div className="table-felt absolute inset-0 rounded-full overflow-hidden" aria-hidden>
               <div className="felt-noise absolute inset-0 opacity-[0.05]" />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    'radial-gradient(ellipse 62% 46% at 50% 30%, rgba(255, 238, 190, 0.16), transparent 70%)',
+                }}
+              />
+              {/* Thin gold inner ring — clean, no text */}
+              <div className="absolute inset-7 sm:inset-9 rounded-full border border-amber-200/15" />
             </div>
-            {/* Gold emblem ring */}
-            <svg
-              className="absolute inset-0 h-full w-full pointer-events-none opacity-40"
-              viewBox="0 0 200 200"
-              aria-hidden
-            >
-              <defs>
-                <path
-                  id="emblem-circle"
-                  d="M 100,100 m -58,0 a 58,58 0 1,1 112,0 a 58,58 0 1,1 -112,0"
-                />
-              </defs>
-              <text fontSize="10" fill="#fcd34d" letterSpacing="3" fontWeight="800">
-                <textPath href="#emblem-circle">
-                  BHABI THULLA • ZUNAIR'S PLAYGROUND •
-                </textPath>
-              </text>
-              <text x="100" y="112" textAnchor="middle" fontSize="34" fill="#fcd34d" opacity="0.5">
-                ♠
-              </text>
-            </svg>
             {/* Turn-flow arrow (anticlockwise) */}
             <svg
-              className="absolute inset-0 h-full w-full pointer-events-none opacity-25"
+              className="absolute inset-0 h-full w-full pointer-events-none opacity-20"
               viewBox="0 0 200 200"
               aria-hidden
             >
@@ -237,7 +316,7 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
             </svg>
 
             {/* Thulla flash */}
-            {table.thullaFlash && (
+            {table.thullaFlash && !paused && (
               <p
                 className="thulla-flash absolute left-1/2 top-[15%] -translate-x-1/2 z-20 text-amber-200 font-black text-sm sm:text-base text-center whitespace-nowrap bg-emerald-950/80 rounded-full px-4 py-1 border border-amber-300/40"
                 role="alert"
@@ -254,11 +333,11 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
                     {displayPlays.map((p, i) => (
                       <div
                         key={`${p.seat}-${p.card.id}`}
-                        className="play-in -ml-5 first:ml-0 flex flex-col items-center"
-                        style={{ transform: `rotate(${(i - (displayPlays.length - 1) / 2) * 7}deg)` }}
+                        className="play-in -ml-6 first:ml-0 flex flex-col items-center"
+                        style={{ transform: `rotate(${(i - (displayPlays.length - 1) / 2) * 6}deg)` }}
                       >
-                        <CardView card={p.card} small />
-                        <span className="text-amber-100/90 text-[10px] font-semibold max-w-14 truncate mt-0.5 bg-black/60 rounded px-1">
+                        <CardView card={p.card} />
+                        <span className="text-amber-100/90 text-[10px] font-semibold max-w-14 truncate mt-1 bg-black/60 rounded px-1">
                           {match.seats[p.seat].name}
                         </span>
                       </div>
@@ -289,7 +368,7 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
                   y={y}
                   name={s.name}
                   line2={s.isBot ? `BOT · ${s.hand.length} cards` : `${s.hand.length} cards`}
-                  active={isTurn}
+                  active={isTurn && !paused}
                   escaped={s.escaped}
                   isYou={seat === 0}
                   timerPct={seat === 0 && myTurn ? timerPct : undefined}
@@ -297,11 +376,26 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
                 />
               );
             })}
+
+            {/* Paused overlay */}
+            {paused && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-full bg-black/60 backdrop-blur-[2px]">
+                <p className="text-amber-100 font-black text-2xl mb-1">Paused</p>
+                <p className="text-emerald-100/60 text-sm mb-4">Take your time.</p>
+                <button
+                  type="button"
+                  onClick={() => table.togglePause()}
+                  className="rounded-xl bg-amber-300 px-6 py-2.5 font-black text-emerald-950 hover:bg-amber-200"
+                >
+                  ▶ Resume
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* What's-happening panel (desktop) */}
-        <aside className="hidden lg:flex w-72 xl:w-80 shrink-0 flex-col min-h-0 border-l border-emerald-800/60 bg-emerald-950/40">
+        <aside className="hidden lg:flex w-72 xl:w-80 shrink-0 flex-col min-h-0 border-l border-emerald-800/60 bg-black/25">
           <div className="px-4 py-3 border-b border-emerald-800/60">
             <p className="text-xs font-black tracking-[0.2em] text-teal-300/80 uppercase">
               <span className="inline-block h-2 w-2 rounded-full bg-teal-300 mr-2 animate-pulse" aria-hidden />
@@ -309,12 +403,12 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
             </p>
           </div>
           <div className="px-4 py-3">
-            <div className="rounded-xl bg-emerald-900/60 border border-amber-300/30 px-3 py-2.5">
+            <div className="rounded-xl bg-emerald-900/60 border border-amber-300/30 px-3 py-2.5 shadow-[0_4px_16px_rgba(0,0,0,0.35)]">
               <p className="text-amber-100 font-black text-sm">{status.title}</p>
               <p className="text-emerald-100/70 text-xs mt-0.5">{status.sub}</p>
             </div>
           </div>
-          <ul className="flex-1 min-h-0 overflow-y-auto px-4 pb-2 space-y-1.5 text-xs" aria-label="Recent actions">
+          <ul className="flex-1 min-h-0 overflow-y-auto px-4 pb-3 space-y-1.5 text-xs" aria-label="Recent actions">
             {feedEvents.map((e, i) => (
               <li
                 key={`${i}-${e}`}
@@ -328,20 +422,6 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
               </li>
             ))}
           </ul>
-          <div className="px-4 py-3 border-t border-emerald-800/60">
-            <p className="text-[11px] font-bold text-emerald-100/60 uppercase tracking-wider mb-1.5">
-              Quick rules
-            </p>
-            <ul className="text-[11px] text-emerald-100/50 space-y-1 leading-snug">
-              <li>• Follow the led suit if you can.</li>
-              <li>
-                • Can't follow? Any card — that's a{' '}
-                <span className="text-amber-200 font-semibold">Thulla</span>; the trick stops.
-              </li>
-              <li>• Highest card of the led suit picks up the pile.</li>
-              <li>• Empty your hand to escape. Last one holding cards is the Bhabi.</li>
-            </ul>
-          </div>
         </aside>
       </div>
 
@@ -353,19 +433,25 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
       </div>
 
       {/* Your hand — single tap plays immediately. */}
-      <div className="shrink-0 h-44 border-t border-emerald-800/60 bg-emerald-950/40 px-3 sm:px-5 pt-2 pb-3 safe-bottom">
-        <div className="flex items-center justify-between mb-1 max-w-xl mx-auto">
+      <div className="shrink-0 h-40 border-t border-amber-200/10 bg-black/30 px-3 sm:px-5 pt-1.5 pb-2 safe-bottom">
+        <div className="flex items-center justify-between mb-0.5 max-w-3xl mx-auto">
           <p className="text-amber-50 text-sm font-bold truncate">
             {nickname}
             {me.escaped && <span className="text-teal-300 ml-2">escaped ✓</span>}
             {!me.escaped && <span className="text-emerald-100/50 font-normal ml-2">{me.hand.length} cards</span>}
           </p>
           <p className="text-emerald-100/50 text-xs">
-            {myTurn ? (secondsLeft > 0 ? `${secondsLeft}s — tap a card` : 'auto-playing…') : 'waiting…'}
+            {paused
+              ? 'paused'
+              : myTurn
+                ? secondsLeft > 0
+                  ? `${secondsLeft}s — tap a card`
+                  : 'auto-playing…'
+                : 'waiting…'}
           </p>
         </div>
         {error && (
-          <p className="text-red-200 bg-red-950/60 border border-red-800/60 rounded-lg px-3 py-1 text-xs mb-1 max-w-xl mx-auto" role="alert">
+          <p className="text-red-200 bg-red-950/60 border border-red-800/60 rounded-lg px-3 py-1 text-xs mb-1 max-w-3xl mx-auto" role="alert">
             {error}
           </p>
         )}
@@ -380,10 +466,10 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
               <div key={c.id} role="option" aria-selected={false}>
                 <CardView
                   card={c}
-                  legal={myTurn && legal}
+                  legal={myTurn && legal && !paused}
                   dimmed={myTurn && !legal}
                   onClick={() => {
-                    if (!myTurn) return;
+                    if (!myTurn || paused) return;
                     if (legal) table.playCard(0, c.id);
                     else table.notify(illegalReason ?? 'Not your turn.');
                   }}
@@ -393,6 +479,8 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
           })}
         </div>
       </div>
+
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
     </div>
   );
 }

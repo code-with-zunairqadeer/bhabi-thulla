@@ -28,6 +28,7 @@ export interface TableState {
   turn: number | null;
   legalIds: Set<string>;
   secondsLeft: number;
+  paused: boolean;
   lastResult: PlayResult | null;
   thullaFlash: string | null;
   /** The just-completed trick, shown until the next card is played. */
@@ -36,6 +37,7 @@ export interface TableState {
   events: string[];
   playCard: (seat: number, cardId: string) => void;
   notify: (msg: string) => void;
+  togglePause: () => void;
 }
 
 const BOT_NAMES = ['Alpha Bot', 'Beta Bot', 'Gamma Bot', 'Delta Bot', 'Echo Bot', 'Foxx Bot'];
@@ -56,6 +58,7 @@ export function useTable(config: TableConfig): TableState {
   const [, setVersion] = useState(0);
   const [moveCount, setMoveCount] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(TURN_SECONDS);
+  const [paused, setPaused] = useState(false);
   const [lastResult, setLastResult] = useState<PlayResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [completedTrick, setCompletedTrick] = useState<{ plays: TrickPlay[]; ledSuit: Suit } | null>(null);
@@ -65,6 +68,8 @@ export function useTable(config: TableConfig): TableState {
   const turnStartedAt = useRef<number>(Date.now());
   /** Bots wait until this timestamp after a trick completes. */
   const pauseUntil = useRef<number>(0);
+  /** True while the game is paused: bots and the turn timer freeze. */
+  const pausedRef = useRef(false);
   /** Guards against retry-spam if the engine ever rejects a bot move. */
   const attemptedMove = useRef<string | null>(null);
   const errorTimer = useRef<number | null>(null);
@@ -81,6 +86,11 @@ export function useTable(config: TableConfig): TableState {
     setError(msg);
     if (errorTimer.current) window.clearTimeout(errorTimer.current);
     errorTimer.current = window.setTimeout(() => setError(null), 2500);
+  }, []);
+
+  const togglePause = useCallback(() => {
+    pausedRef.current = !pausedRef.current;
+    setPaused(pausedRef.current);
   }, []);
 
   const playCard = useCallback(
@@ -111,10 +121,10 @@ export function useTable(config: TableConfig): TableState {
   // Bot driver: a watchdog interval instead of one-shot timeouts, so a bot
   // can never get stuck. Every tick it asks: is it a bot's turn, and has the
   // pacing delay elapsed? The engine state is read live, so missed or failed
-  // turns are impossible by construction.
+  // turns are impossible by construction. Frozen while paused.
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (match.phase === 'finished') return;
+      if (match.phase === 'finished' || pausedRef.current) return;
       const t = match.turnSeat();
       if (t === null || !match.seats[t].isBot) return;
       const wait = Math.max(BOT_DELAY_MS, pauseUntil.current - Date.now());
@@ -132,9 +142,9 @@ export function useTable(config: TableConfig): TableState {
     return () => window.clearInterval(id);
   }, [match, config.difficulty, playCard, moveCount, flashError]);
 
-  // Human turn timer; timeout auto-plays a sensible move.
+  // Human turn timer; timeout auto-plays a sensible move. Frozen while paused.
   useEffect(() => {
-    if (match.phase === 'finished' || turn === null) return;
+    if (paused || match.phase === 'finished' || turn === null) return;
     if (match.seats[turn].isBot) return;
     if (secondsLeft <= 0) {
       const card: Card = chooseBotMove(observe(match, turn), 'normal');
@@ -143,7 +153,7 @@ export function useTable(config: TableConfig): TableState {
     }
     const id = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => window.clearTimeout(id);
-  }, [match, turn, secondsLeft, playCard]);
+  }, [match, turn, secondsLeft, playCard, paused]);
 
   const legalIds = new Set(
     turn === 0 && match.phase !== 'finished' ? match.legalPlays(0).map((c) => c.id) : [],
@@ -154,6 +164,7 @@ export function useTable(config: TableConfig): TableState {
     turn,
     legalIds,
     secondsLeft,
+    paused,
     lastResult,
     thullaFlash: thullaFlashIdx !== null ? (match.events[thullaFlashIdx] ?? null) : null,
     completedTrick,
@@ -161,5 +172,6 @@ export function useTable(config: TableConfig): TableState {
     events: match.events,
     playCard,
     notify: flashError,
+    togglePause,
   };
 }
