@@ -3,6 +3,8 @@ import {
   Match,
   PlayResult,
   Card,
+  Suit,
+  TrickPlay,
   BotDifficulty,
   observe,
   chooseBotMove,
@@ -25,15 +27,15 @@ export interface TableState {
   match: Match;
   turn: number | null;
   legalIds: Set<string>;
-  selectedId: string | null;
   secondsLeft: number;
   lastResult: PlayResult | null;
   thullaFlash: string | null;
+  /** The just-completed trick, shown until the next card is played. */
+  completedTrick: { plays: TrickPlay[]; ledSuit: Suit } | null;
   error: string | null;
   events: string[];
-  selectCard: (id: string) => void;
-  playSelected: () => void;
   playCard: (seat: number, cardId: string) => void;
+  notify: (msg: string) => void;
 }
 
 const BOT_NAMES = ['Alpha Bot', 'Beta Bot', 'Gamma Bot', 'Delta Bot', 'Echo Bot', 'Foxx Bot'];
@@ -53,10 +55,10 @@ export function useTable(config: TableConfig): TableState {
   );
   const [, setVersion] = useState(0);
   const [moveCount, setMoveCount] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(TURN_SECONDS);
   const [lastResult, setLastResult] = useState<PlayResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [completedTrick, setCompletedTrick] = useState<{ plays: TrickPlay[]; ledSuit: Suit } | null>(null);
   /** Index into match.events of a Thulla announcement to flash until next play. */
   const [thullaFlashIdx, setThullaFlashIdx] = useState<number | null>(null);
   /** When the current turn started (for pacing bot moves). */
@@ -70,7 +72,6 @@ export function useTable(config: TableConfig): TableState {
   const turn = match.turnSeat();
 
   const refresh = useCallback(() => {
-    setSelectedId(null);
     setSecondsLeft(TURN_SECONDS);
     setVersion((v) => v + 1);
     setMoveCount((c) => c + 1);
@@ -89,6 +90,8 @@ export function useTable(config: TableConfig): TableState {
         const r = match.playCard(seat, cardId);
         setLastResult(r);
         if (r.thulla) setThullaFlashIdx(match.events.length - 1);
+        // Keep the finished trick on screen until the next card is played.
+        setCompletedTrick(r.trickComplete ? r.completedTrick : null);
         // Let the trick result breathe before the next trick's lead.
         if (r.trickComplete) pauseUntil.current = Date.now() + POST_TRICK_PAUSE_MS;
       } catch (e) {
@@ -99,18 +102,6 @@ export function useTable(config: TableConfig): TableState {
     },
     [match, refresh, flashError],
   );
-
-  const selectCard = useCallback(
-    (id: string) => {
-      if (turn !== 0 || match.phase === 'finished') return;
-      setSelectedId((prev) => (prev === id ? null : id));
-    },
-    [turn, match],
-  );
-
-  const playSelected = useCallback(() => {
-    if (selectedId && turn === 0) playCard(0, selectedId);
-  }, [selectedId, turn, playCard]);
 
   // Restart the turn clock whenever the turn advances.
   useEffect(() => {
@@ -162,14 +153,13 @@ export function useTable(config: TableConfig): TableState {
     match,
     turn,
     legalIds,
-    selectedId,
     secondsLeft,
     lastResult,
     thullaFlash: thullaFlashIdx !== null ? (match.events[thullaFlashIdx] ?? null) : null,
+    completedTrick,
     error,
     events: match.events,
-    selectCard,
-    playSelected,
     playCard,
+    notify: flashError,
   };
 }

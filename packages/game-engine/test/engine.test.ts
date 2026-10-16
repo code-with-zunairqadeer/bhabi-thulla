@@ -432,4 +432,44 @@ describe('known voids', () => {
     const obs = observe(m, botSeat);
     expect(obs.knownVoids.has('1:hearts')).toBe(true);
   });
+
+  it('captures the completed trick so clients can keep showing it', () => {
+    const m = new Match({
+      numSeats: 4,
+      preDeal: [
+        [C('A', 'spades'), C('K', 'hearts')],
+        [C('5', 'hearts')],
+        [C('A', 'hearts')],
+        [C('3', 'clubs')],
+      ],
+    });
+    m.isFirstTrick = false;
+    m.startTrick(0);
+    m.playCard(0, 'K-hearts');
+    m.playCard(1, '5-hearts');
+    m.playCard(2, 'A-hearts');
+    const r = m.playCard(3, '3-clubs'); // Thulla completes the trick
+    expect(r.trickComplete).toBe(true);
+    expect(r.completedTrick?.ledSuit).toBe('hearts');
+    expect(r.completedTrick?.plays.map((p) => p.card.id).sort()).toEqual(
+      ['K-hearts', '5-hearts', 'A-hearts', '3-clubs'].sort(),
+    );
+    // The engine already seated the next trick; the snapshot preserves the old one.
+    expect(m.trick?.plays).toHaveLength(0);
+  });
+
+  it('normalBot prefers the suit with fewer known-void opponents', () => {
+    const obs: BotObservation = {
+      seat: 0,
+      ownHand: [C('K', 'spades'), C('Q', 'hearts'), C('Q', 'diamonds')],
+      legalPlays: [C('K', 'spades'), C('Q', 'hearts'), C('Q', 'diamonds')],
+      ledSuit: null,
+      trickPlays: [],
+      handCounts: [3, 5, 5, 5],
+      escaped: [false, false, false, false],
+      // Two opponents void in spades, one in hearts, none in diamonds.
+      knownVoids: new Set(['1:spades', '2:spades', '3:hearts']),
+    };
+    expect(normalBot(obs).id).toBe('Q-diamonds');
+  });
 });

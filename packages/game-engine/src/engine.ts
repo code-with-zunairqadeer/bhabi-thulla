@@ -39,6 +39,12 @@ export interface PlayResult {
   pickedUpBy: number | null;
   /** Seats that escaped as a result of this trick. */
   escapedSeats: number[];
+  /**
+   * The trick that just completed (null unless trickComplete). The engine
+   * seats the next trick immediately, so clients use this to keep showing
+   * the finished trick — including the final card — until the next play.
+   */
+  completedTrick: { plays: TrickPlay[]; ledSuit: Suit } | null;
   finished: boolean;
   /** Seat index of the Bhabi, when finished with one player holding cards. */
   bhabi: number | null;
@@ -183,6 +189,7 @@ export class Match {
     const result: PlayResult = {
       seat, card, thulla,
       trickComplete: false, pickedUpBy: null, escapedSeats: [],
+      completedTrick: null,
       finished: false, bhabi: null, draw: false,
     };
 
@@ -202,6 +209,7 @@ export class Match {
     this.seats[recipient].hand.push(...pile);
     result.pickedUpBy = recipient;
     result.trickComplete = true;
+    result.completedTrick = { plays: [...t.plays], ledSuit: t.ledSuit as Suit };
     const who = this.seats[result.seat].name;
     const got = this.seats[recipient].name;
     this.events.push(
@@ -216,6 +224,7 @@ export class Match {
     const pile = t.plays.map((p) => p.card);
     this.discardPile.push(...pile);
     result.trickComplete = true;
+    result.completedTrick = { plays: [...t.plays], ledSuit: t.ledSuit as Suit };
 
     // Protected opening: the whole opening trick is discarded and the
     // A-spades player leads next (unless they escaped).

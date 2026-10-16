@@ -11,9 +11,16 @@ interface Props {
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
 
 export function TableScreen({ table, nickname, onLeave }: Props) {
-  const { match, turn, legalIds, selectedId, secondsLeft, error, events } = table;
+  const { match, turn, legalIds, secondsLeft, error, events, completedTrick } = table;
   const me = match.seats[0];
   const trick = match.trick;
+
+  // The engine seats the next trick instantly, so keep showing the finished
+  // trick — including its final card — until the next card is played.
+  const livePlays = trick?.plays ?? [];
+  const displayPlays = livePlays.length > 0 ? livePlays : (completedTrick?.plays ?? []);
+  const displayLedSuit = trick?.ledSuit ?? completedTrick?.ledSuit ?? null;
+  const showingCompleted = livePlays.length === 0 && (completedTrick?.plays.length ?? 0) > 0;
 
   // Sort the live hand on every render. The engine mutates hand arrays in
   // place, so memoizing on the array reference would show stale cards.
@@ -22,7 +29,7 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
   );
 
   const myTurn = turn === 0 && match.phase !== 'finished';
-  const ledSuit = trick?.ledSuit ?? null;
+  const ledSuit = displayLedSuit;
   const mustFollow = ledSuit !== null && me.hand.some((c) => c.suit === ledSuit);
   const hint = !myTurn
     ? null
@@ -31,8 +38,10 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
       : mustFollow
         ? `You must follow ${ledSuit}.`
         : ledSuit
-          ? `No ${ledSuit} in hand — anything goes. Break suit and it's a Thulla!`
-          : 'Your lead — choose any card.';
+          ? `No ${ledSuit} in hand — tap any card. Break suit and it's a Thulla!`
+          : 'Your lead — tap any card.';
+
+  const illegalReason = mustFollow ? `You must follow ${ledSuit}.` : null;
 
   const opponents = match.seats.slice(1);
   const timerPct = Math.max(0, Math.min(100, (secondsLeft / TURN_SECONDS) * 100));
@@ -119,9 +128,9 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
             {table.thullaFlash}
           </p>
         )}
-        {trick && trick.plays.length > 0 ? (
+        {displayPlays.length > 0 ? (
           <div className="flex flex-wrap items-end justify-center gap-3" aria-live="polite">
-            {trick.plays.map((p) => (
+            {displayPlays.map((p) => (
               <div key={`${p.seat}-${p.card.id}`} className="flex flex-col items-center gap-1 play-in">
                 <CardView card={p.card} small />
                 <span className="text-emerald-100/70 text-[11px] font-semibold max-w-16 truncate">
@@ -138,6 +147,7 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
         {ledSuit && (
           <p className="text-emerald-100/60 text-xs mt-2">
             Led suit: <span className="font-bold text-amber-200 capitalize">{ledSuit}</span>
+            {showingCompleted && <span className="text-emerald-100/40"> · trick complete</span>}
           </p>
         )}
       </div>
@@ -159,7 +169,7 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
         </ul>
       </div>
 
-      {/* Your hand */}
+      {/* Your hand — single tap plays immediately. */}
       <div className="border-t border-emerald-800/60 bg-emerald-950/40 px-3 sm:px-5 pt-2 pb-4 safe-bottom">
         <div className="flex items-center justify-between mb-1.5">
           <p className="text-amber-50 text-sm font-bold truncate">
@@ -167,33 +177,34 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
             {me.escaped && <span className="text-teal-300 ml-2">escaped ✓</span>}
             {!me.escaped && <span className="text-emerald-100/50 font-normal ml-2">{me.hand.length} cards</span>}
           </p>
-          <button
-            type="button"
-            onClick={table.playSelected}
-            disabled={!selectedId || !myTurn}
-            className="rounded-xl bg-amber-300 px-6 py-2 font-black text-emerald-950 transition hover:bg-amber-200 disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            Play
-          </button>
+          <p className="text-emerald-100/50 text-xs">
+            {myTurn ? (secondsLeft > 0 ? `${secondsLeft}s — tap a card` : 'auto-playing…') : 'waiting…'}
+          </p>
         </div>
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-2" role="listbox" aria-label="Your hand">
           {sortedHand.map((c) => {
             const legal = legalIds.has(c.id);
             return (
-              <div key={c.id} role="option" aria-selected={selectedId === c.id}>
+              <div key={c.id} role="option" aria-selected={false}>
                 <CardView
                   card={c}
-                  selected={selectedId === c.id}
                   legal={myTurn && legal}
                   dimmed={myTurn && !legal}
-                  onClick={myTurn ? () => table.selectCard(c.id) : undefined}
+                  onClick={
+                    myTurn
+                      ? () =>
+                          legal
+                            ? table.playCard(0, c.id)
+                            : table.notify(illegalReason ?? 'Not your turn.')
+                      : undefined
+                  }
                 />
               </div>
             );
           })}
         </div>
         <p className="text-emerald-100/40 text-[11px] mt-1 text-center">
-          Tap a highlighted card to select, then Play. {SUITS.length * 13}-card deck · no trump
+          Tap a highlighted card to throw it. {SUITS.length * 13}-card deck · no trump
         </p>
       </div>
     </div>

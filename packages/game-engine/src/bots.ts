@@ -59,20 +59,25 @@ export function easyBot(obs: BotObservation, rng: () => number = Math.random): C
 /**
  * Choose a lead card.
  *
- * Breaking suit is public, so a suit in which a still-active opponent is
- * known void is dangerous to lead: they will stop the round, and a high lead
- * card would then pick the pile up. Prefer safe suits and shed the highest
- * card there. When every suit has a known void, lead low — an opponent likely
- * holds a higher card and takes the pile instead.
+ * Breaking suit is public, so leading a suit in which a still-active opponent
+ * is known void hands them the power to stop the round — and a high lead card
+ * would then pick the pile up. The rule is strict: never lead into a known
+ * void while any alternative exists. Suits are ranked by fewest known-void
+ * opponents, then by highest card (shed danger). If every suit has a known
+ * void, lead the lowest card of the least-dangerous suit so an opponent
+ * likely holds higher and takes the pile instead.
  */
 function chooseLead(obs: BotObservation, plays: readonly Card[]): Card {
-  const dangerous = (suit: Suit): boolean =>
-    obs.handCounts.some(
-      (_, i) => i !== obs.seat && !obs.escaped[i] && obs.knownVoids.has(`${i}:${suit}`),
+  const voidCount = (suit: Suit): number =>
+    obs.handCounts.reduce(
+      (n, _, i) => n + (i !== obs.seat && !obs.escaped[i] && obs.knownVoids.has(`${i}:${suit}`) ? 1 : 0),
+      0,
     );
-  const safe = plays.filter((c) => !dangerous(c.suit));
-  if (safe.length > 0) return highest(safe);
-  return lowest(plays);
+  const minVoids = Math.min(...plays.map((c) => voidCount(c.suit)));
+  const candidates = plays.filter((c) => voidCount(c.suit) === minVoids);
+  // Safest suits: shed the highest card. Every suit dangerous: lead the
+  // lowest card so an opponent likely holds higher and takes the pile.
+  return minVoids > 0 ? lowest(candidates) : highest(candidates);
 }
 
 /**
