@@ -1,0 +1,1 @@
+{"description":"Pure TypeScript Bhabi Thulla game engine: cards, Classic rules, match state, bots.","devDependencies":{"typescript":"5.6.3","vitest":"2.1.8"},"name":"@bhabi-thulla/game-engine","scripts":{"build":"tsc","test":"vitest run","typecheck":"tsc --noEmit"},"type":"module","version":"0.1.0"}

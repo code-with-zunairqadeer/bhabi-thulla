@@ -1,0 +1,1 @@
+{"description":"Bhabi Thulla — real-time multiplayer Pakistani card game. Developed by Zunair Qadeer.","engines":{"node":">=20"},"name":"bhabi-thulla","private":true,"scripts":{"test":"npm run test --workspaces --if-present","typecheck":"npm run typecheck --workspaces --if-present"},"type":"module","version":"0.1.0","workspaces":["apps/*","packages/*"]}

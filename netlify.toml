@@ -1,0 +1,16 @@
+# Netlify deploys the browser frontend only. The real-time game server
+# runs separately (see docs/ARCHITECTURE.md) — Netlify Functions are not
+# the host for persistent Socket.IO matches.
+
+[build]
+  command = "npm run build --workspace apps/web"
+  publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback so /join/TULLA-XXXXXX deep links load the app.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
