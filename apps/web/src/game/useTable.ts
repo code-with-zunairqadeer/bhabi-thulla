@@ -10,18 +10,28 @@ import {
   chooseBotMove,
 } from '@bhabi-thulla/game-engine';
 
+/** Game speeds: how long bots wait before playing and how long a finished
+ *  trick stays on screen. Relaxed is the default so new players can follow. */
+export type GameSpeed = 'relaxed' | 'normal' | 'fast';
+export interface Pace {
+  botDelayMs: number;
+  postTrickMs: number;
+}
+export const SPEEDS: Record<GameSpeed, Pace & { label: string }> = {
+  relaxed: { label: 'Relaxed', botDelayMs: 2600, postTrickMs: 2200 },
+  normal: { label: 'Normal', botDelayMs: 1700, postTrickMs: 1400 },
+  fast: { label: 'Fast', botDelayMs: 900, postTrickMs: 800 },
+};
+
 export interface TableConfig {
   nickname: string;
   numSeats: number;
   difficulty: BotDifficulty;
+  pace: Pace;
 }
 
 /** Practice-table turn timer (seconds). Matches the brief's default. */
 export const TURN_SECONDS = 30;
-/** Delay before a bot plays, so humans can follow the action. */
-const BOT_DELAY_MS = 1700;
-/** Extra beat after a trick completes, so the result stays visible. */
-const POST_TRICK_PAUSE_MS = 1600;
 
 export interface TableState {
   match: Match;
@@ -103,14 +113,14 @@ export function useTable(config: TableConfig): TableState {
         // Keep the finished trick on screen until the next card is played.
         setCompletedTrick(r.trickComplete ? r.completedTrick : null);
         // Let the trick result breathe before the next trick's lead.
-        if (r.trickComplete) pauseUntil.current = Date.now() + POST_TRICK_PAUSE_MS;
+        if (r.trickComplete) pauseUntil.current = Date.now() + config.pace.postTrickMs;
       } catch (e) {
         flashError(e instanceof Error ? e.message : 'Illegal move');
         return;
       }
       refresh();
     },
-    [match, refresh, flashError],
+    [match, refresh, flashError, config.pace],
   );
 
   // Restart the turn clock whenever the turn advances.
@@ -127,7 +137,7 @@ export function useTable(config: TableConfig): TableState {
       if (match.phase === 'finished' || pausedRef.current) return;
       const t = match.turnSeat();
       if (t === null || !match.seats[t].isBot) return;
-      const wait = Math.max(BOT_DELAY_MS, pauseUntil.current - Date.now());
+      const wait = Math.max(config.pace.botDelayMs, pauseUntil.current - Date.now());
       if (Date.now() - turnStartedAt.current < wait) return;
       const key = `${t}:${moveCount}`;
       if (attemptedMove.current === key) return;
@@ -140,7 +150,7 @@ export function useTable(config: TableConfig): TableState {
       }
     }, 250);
     return () => window.clearInterval(id);
-  }, [match, config.difficulty, playCard, moveCount, flashError]);
+  }, [match, config.difficulty, config.pace, playCard, moveCount, flashError]);
 
   // Human turn timer; timeout auto-plays a sensible move. Frozen while paused.
   useEffect(() => {

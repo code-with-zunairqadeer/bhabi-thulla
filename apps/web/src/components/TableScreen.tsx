@@ -1,12 +1,26 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { SUITS, rankValue } from '@bhabi-thulla/game-engine';
-import { TableState, TURN_SECONDS } from '../game/useTable';
+import {
+  Pause,
+  Play,
+  RotateCcw,
+  BookOpen,
+  Turtle,
+  Rabbit,
+  Zap,
+  Layers,
+  LogOut,
+  ChevronLeft,
+} from 'lucide-react';
+import { rankValue } from '@bhabi-thulla/game-engine';
+import { TableState, TURN_SECONDS, GameSpeed, SPEEDS } from '../game/useTable';
 import { CardView } from './CardView';
 
 interface Props {
   table: TableState;
   nickname: string;
+  speed: GameSpeed;
+  onSpeedChange: (s: GameSpeed) => void;
   onLeave: () => void;
   onRematch: () => void;
 }
@@ -14,51 +28,56 @@ interface Props {
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
 
 /**
- * Seat positions around the table, as fractions of the table box.
+ * Seat positions on the ELLIPSE table, as fractions of the table box.
  * Seat 0 (you) sits at the bottom; seats advance ANTICLOCKWISE as seen from
  * above — the way a real Bhabi Thulla table flows.
  */
 function seatPos(seat: number, numSeats: number): { x: number; y: number } {
   const angle = ((90 - (seat * 360) / numSeats) * Math.PI) / 180;
-  return { x: 50 + 47 * Math.cos(angle), y: 50 + 47 * Math.sin(angle) };
+  return { x: 50 + 47 * Math.cos(angle), y: 50 + 46 * Math.sin(angle) };
+}
+
+/** Offset of a played card from the table centre, towards its player's seat. */
+function trickOffset(seat: number, numSeats: number): { x: number; y: number } {
+  const angle = ((90 - (seat * 360) / numSeats) * Math.PI) / 180;
+  return { x: 12 * Math.cos(angle), y: 15 * Math.sin(angle) };
 }
 
 function SeatPod({
   x,
   y,
   name,
-  line2,
+  cards,
   active,
   escaped,
-  isYou,
-  timerPct,
-  lowTime,
 }: {
   x: number;
   y: number;
   name: string;
-  line2: string;
+  cards: number;
   active: boolean;
   escaped: boolean;
-  isYou: boolean;
-  timerPct?: number;
-  lowTime?: boolean;
 }) {
   return (
     <div
       className="absolute z-10"
       style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
+      title={`${name} · ${cards} cards${escaped ? ' · escaped' : ''}`}
     >
-      <div className="flex flex-col items-center w-16 sm:w-20">
+      <div
+        className={`flex flex-col items-center transition-transform duration-200 ${
+          active ? 'scale-[1.15]' : 'hover:scale-105'
+        } ${escaped ? 'opacity-45 grayscale' : ''}`}
+      >
         <div
-          className={`relative flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full font-black text-sm sm:text-base transition-all ${
+          className={`relative flex h-11 w-11 items-center justify-center rounded-full font-black text-base transition-all ${
             active
-              ? 'bg-gradient-to-br from-amber-200 to-amber-400 text-emerald-950 ring-2 ring-amber-100 shadow-[0_0_26px_rgba(252,211,77,0.7)] scale-110'
+              ? 'bg-gradient-to-br from-amber-200 to-amber-400 text-emerald-950 ring-2 ring-amber-100 shadow-[0_0_30px_rgba(252,211,77,0.75)]'
               : 'bg-gradient-to-br from-emerald-800 to-emerald-950 text-amber-100 ring-1 ring-amber-200/30 shadow-[0_4px_10px_rgba(0,0,0,0.5)]'
-          } ${escaped ? 'opacity-40 grayscale' : ''}`}
+          }`}
           aria-label={`${name}${active ? ', current turn' : ''}${escaped ? ', escaped' : ''}`}
         >
-          {active && !escaped && (
+          {active && (
             <span className="absolute -top-1 -right-1 flex h-4 w-4" aria-hidden>
               <span className="absolute inline-flex h-full w-full rounded-full bg-amber-200 opacity-75 animate-ping" />
               <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-400 border-2 border-emerald-950" />
@@ -66,29 +85,53 @@ function SeatPod({
           )}
           {name.charAt(0).toUpperCase()}
         </div>
-        <p
-          className={`mt-1 max-w-16 sm:max-w-20 truncate text-[11px] sm:text-xs font-bold leading-tight text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] ${
-            active ? 'text-amber-200' : 'text-amber-50/90'
-          } ${escaped ? 'opacity-50' : ''}`}
-        >
-          {name}
-          {isYou && <span className="text-teal-300"> (you)</span>}
-        </p>
-        <p className="text-emerald-100/70 text-[10px] sm:text-[11px] leading-tight drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-          {escaped ? <span className="text-teal-300 font-semibold">escaped ✓</span> : line2}
-        </p>
-        {isYou && timerPct !== undefined && (
-          <div className="mt-1 h-1 w-12 sm:w-14 rounded bg-black/50 overflow-hidden" aria-hidden>
-            <div
-              className={`h-full transition-all duration-1000 ${lowTime ? 'bg-red-400' : 'bg-amber-300'}`}
-              style={{ width: `${timerPct}%` }}
-            />
-          </div>
-        )}
+        <div className="mt-1 rounded-full bg-black/60 border border-white/10 backdrop-blur px-2 py-0.5 text-center leading-tight">
+          <p
+            className={`max-w-20 truncate text-[10px] font-bold ${
+              active ? 'text-amber-200' : 'text-amber-50/90'
+            }`}
+          >
+            {name}
+          </p>
+          <p className="text-emerald-100/60 text-[9px]">
+            {escaped ? <span className="text-teal-300 font-semibold">escaped ✓</span> : `${cards} cards`}
+          </p>
+        </div>
       </div>
     </div>
   );
 }
+
+function ToolButton({
+  title,
+  label,
+  onClick,
+  children,
+}: {
+  title: string;
+  label?: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95"
+    >
+      {children}
+      {label && <span className="hidden md:inline">{label}</span>}
+    </button>
+  );
+}
+
+const SPEED_ICONS: Record<GameSpeed, React.ReactNode> = {
+  relaxed: <Turtle size={14} />,
+  normal: <Rabbit size={14} />,
+  fast: <Zap size={14} />,
+};
 
 const RULES = [
   ['Goal', 'Get rid of every card. The last player still holding cards is the Bhabi — and loses.'],
@@ -137,10 +180,10 @@ function RulesModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function TableScreen({ table, nickname, onLeave, onRematch }: Props) {
+export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, onRematch }: Props) {
   const { match, turn, legalIds, secondsLeft, paused, error, events, completedTrick } = table;
-  const [menuOpen, setMenuOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [shakeId, setShakeId] = useState<string | null>(null);
   const me = match.seats[0];
   const trick = match.trick;
 
@@ -163,18 +206,17 @@ export function TableScreen({ table, nickname, onLeave, onRematch }: Props) {
   const hint = !myTurn
     ? null
     : match.isFirstTrick && (trick?.plays.length ?? 0) === 0
-      ? 'You hold the A-spades — you must open with it.'
+      ? 'You hold the A♠ — open with it.'
       : mustFollow
         ? `You must follow ${ledSuit}.`
         : ledSuit
-          ? `No ${ledSuit} in hand — tap any card. Break suit and it's a Thulla!`
-          : 'Your lead — tap any card.';
+          ? `No ${ledSuit} in hand — anything goes. Break suit and it's a Thulla!`
+          : 'Your lead — play anything.';
 
   const illegalReason = mustFollow ? `You must follow ${ledSuit}.` : null;
   const timerPct = Math.max(0, Math.min(100, (secondsLeft / TURN_SECONDS) * 100));
   const turnName = turn !== null ? match.seats[turn].name : null;
   const feedEvents = events.slice().reverse();
-  const latestEvent = events.length > 0 ? events[events.length - 1] : null;
 
   const status =
     match.phase === 'finished'
@@ -191,214 +233,363 @@ export function TableScreen({ table, nickname, onLeave, onRematch }: Props) {
           ? { title: '🟢 Your turn', sub: hint ?? 'Tap a highlighted card.' }
           : { title: `🃏 ${turnName}'s turn`, sub: 'Waiting for their card…' };
 
-  const closeMenu = () => setMenuOpen(false);
+  const thullaActive = !!table.thullaFlash && !paused;
+
+  const tryPlay = (cardId: string) => {
+    if (!myTurn || paused) return;
+    if (legalIds.has(cardId)) {
+      table.playCard(0, cardId);
+    } else {
+      table.notify(illegalReason ?? 'Not your turn.');
+      setShakeId(cardId);
+      window.setTimeout(() => setShakeId((s) => (s === cardId ? null : s)), 450);
+    }
+  };
 
   return (
     <div className="felt h-dvh flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 sm:px-5 border-b border-amber-200/10 bg-black/30 backdrop-blur">
+      {/* ── Toolbar ─────────────────────────────────────────── */}
+      <header className="h-12 shrink-0 z-30 flex items-center gap-2 px-3 border-b border-white/10 bg-black/40 backdrop-blur">
         <Link
           to="/"
-          className="text-emerald-100/70 text-sm font-semibold hover:text-amber-200 px-1 py-1 whitespace-nowrap"
+          className="flex items-center gap-0.5 text-emerald-100/70 text-sm font-semibold hover:text-amber-200 whitespace-nowrap"
         >
-          ← Playground
+          <ChevronLeft size={16} />
+          <span className="hidden sm:inline">Playground</span>
         </Link>
-        <div aria-live="polite" className="flex-1 flex justify-center">
+        <div className="w-px h-5 bg-white/10" aria-hidden />
+        <h1 className="font-black text-amber-100 tracking-wide text-sm whitespace-nowrap">
+          Bhabi Thulla
+        </h1>
+        <p className="hidden xl:block text-[11px] text-emerald-100/45 whitespace-nowrap">
+          Developed by <span className="text-amber-200/80 font-semibold">Zunair Qadeer</span>
+        </p>
+
+        {/* Turn indicator */}
+        <div aria-live="polite" className="flex-1 flex justify-center min-w-0">
           {match.phase === 'finished' ? (
             <span className="text-emerald-100/60 text-xs font-semibold">Round over</span>
-          ) : myTurn ? (
-            <span className="animate-pulse rounded-full bg-amber-300 px-4 py-1 text-emerald-950 text-xs font-black tracking-wide shadow-[0_0_16px_rgba(252,211,77,0.5)]">
+          ) : myTurn && !paused ? (
+            <span className="animate-pulse rounded-full bg-amber-300 px-4 py-1 text-emerald-950 text-xs font-black tracking-wide shadow-[0_0_16px_rgba(252,211,77,0.5)] whitespace-nowrap">
               YOUR TURN{secondsLeft <= 10 ? ` · ${secondsLeft}s` : ''}
             </span>
           ) : (
-            <span className="rounded-full border border-emerald-700/60 bg-emerald-950/60 px-4 py-1 text-emerald-100/80 text-xs font-semibold">
-              {turnName}'s turn…
+            <span className="rounded-full border border-emerald-700/60 bg-emerald-950/60 px-4 py-1 text-emerald-100/80 text-xs font-semibold truncate max-w-full">
+              {paused ? 'Paused' : `${turnName}'s turn…`}
             </span>
           )}
         </div>
-        <p className="hidden md:block text-[11px] text-emerald-100/45 whitespace-nowrap">
-          Developed by <span className="text-amber-200/80 font-semibold">Zunair Qadeer</span>
-        </p>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen((o) => !o)}
-            className="rounded-lg border border-emerald-700/60 bg-emerald-950/60 px-3 py-1.5 text-sm font-bold text-emerald-100 hover:border-amber-300/60 hover:text-amber-200"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label="Game menu"
+
+        {/* Action buttons — always visible, no hidden menu */}
+        <div className="flex items-center gap-1.5">
+          <ToolButton
+            title={paused ? 'Resume the game' : 'Pause the game'}
+            label={paused ? 'Resume' : 'Pause'}
+            onClick={() => table.togglePause()}
           >
-            ☰
-          </button>
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={closeMenu} aria-hidden />
-              <div
-                className="absolute right-0 top-11 z-40 w-52 panel rounded-xl p-1.5"
-                role="menu"
+            {paused ? <Play size={14} /> : <Pause size={14} />}
+          </ToolButton>
+          <ToolButton title="Restart this round with a fresh deal" label="Restart" onClick={onRematch}>
+            <RotateCcw size={14} />
+          </ToolButton>
+          <ToolButton title="How to play" label="Rules" onClick={() => setRulesOpen(true)}>
+            <BookOpen size={14} />
+          </ToolButton>
+
+          {/* Speed control */}
+          <div
+            className="flex rounded-lg border border-white/10 bg-white/5 p-0.5"
+            role="group"
+            aria-label="Game speed"
+          >
+            {(Object.keys(SPEEDS) as GameSpeed[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                title={`${SPEEDS[s].label} pace`}
+                aria-label={`${SPEEDS[s].label} pace`}
+                aria-pressed={speed === s}
+                onClick={() => onSpeedChange(s)}
+                className={`rounded-md p-1.5 transition active:scale-95 ${
+                  speed === s
+                    ? 'bg-amber-300 text-emerald-950 shadow'
+                    : 'text-emerald-100/60 hover:text-amber-100 hover:bg-white/10'
+                }`}
               >
-                {(
-                  [
-                    [paused ? '▶ Resume' : '⏸ Pause', () => table.togglePause()],
-                    ['🔄 Restart round', () => onRematch()],
-                    ['❓ How to play', () => setRulesOpen(true)],
-                    ['🃏 New table', () => onLeave()],
-                  ] as [string, () => void][]
-                ).map(([label, fn]) => (
-                  <button
-                    key={label}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      closeMenu();
-                      fn();
-                    }}
-                    className="w-full text-left rounded-lg px-3 py-2 text-sm font-semibold text-emerald-100/85 hover:bg-emerald-800/60 hover:text-amber-100"
-                  >
-                    {label}
-                  </button>
-                ))}
-                <Link
-                  to="/"
-                  role="menuitem"
-                  className="block rounded-lg px-3 py-2 text-sm font-semibold text-emerald-100/85 hover:bg-emerald-800/60 hover:text-amber-100"
-                >
-                  🏠 Quit to playground
-                </Link>
-              </div>
-            </>
-          )}
+                {SPEED_ICONS[s]}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-px h-5 bg-white/10" aria-hidden />
+          <ToolButton title="Back to table setup" label="New table" onClick={onLeave}>
+            <Layers size={14} />
+          </ToolButton>
+          <Link
+            to="/"
+            title="Quit to playground"
+            aria-label="Quit to playground"
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-bold text-emerald-100/85 transition hover:border-red-300/40 hover:bg-red-950/40 hover:text-red-200 active:scale-95"
+          >
+            <LogOut size={14} />
+            <span className="hidden md:inline">Quit</span>
+          </Link>
         </div>
       </header>
 
-      {/* Main row: table + instruction panel */}
+      {/* ── Main row: table + feed ──────────────────────────── */}
       <div className="flex-1 min-h-0 flex">
-        {/* Round table */}
-        <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center px-2 py-2 relative">
-          <div
-            className="relative"
-            style={{ width: 'min(calc(100% - 0.5rem), calc(100dvh - 14rem))', aspectRatio: '1 / 1' }}
-          >
-            {/* Wooden rim */}
-            <div className="table-rim absolute -inset-3 sm:-inset-4 rounded-full" aria-hidden />
-            {/* Felt with overhead spotlight */}
-            <div className="table-felt absolute inset-0 rounded-full overflow-hidden" aria-hidden>
-              <div className="felt-noise absolute inset-0 opacity-[0.05]" />
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    'radial-gradient(ellipse 62% 46% at 50% 30%, rgba(255, 238, 190, 0.16), transparent 70%)',
-                }}
-              />
-              {/* Thin gold inner ring — clean, no text */}
-              <div className="absolute inset-7 sm:inset-9 rounded-full border border-amber-200/15" />
-            </div>
-            {/* Turn-flow arrow (anticlockwise) */}
-            <svg
-              className="absolute inset-0 h-full w-full pointer-events-none opacity-20"
-              viewBox="0 0 200 200"
-              aria-hidden
+        {/* Table scene — one continuous felt, no separate bars */}
+        <main className="flex-1 min-w-0 min-h-0 relative">
+          <div className="absolute inset-0 flex items-center justify-center px-4 pt-3 pb-32">
+            <div
+              className={`relative ${thullaActive ? 'table-shake' : ''}`}
+              style={{
+                width: 'min(100%, calc((100dvh - 14rem) * 1.45))',
+                aspectRatio: '1.45 / 1',
+              }}
             >
-              <defs>
-                <marker id="flow-arrow" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-                  <path d="M0,0 L7,3.5 L0,7 z" fill="#fcd34d" />
-                </marker>
-              </defs>
-              <path
-                d="M 93 179.7 A 80 80 0 1 0 107 179.7"
-                fill="none"
-                stroke="#fcd34d"
-                strokeWidth="1.6"
-                strokeDasharray="7 6"
-                markerEnd="url(#flow-arrow)"
-              />
-            </svg>
+              {/* Wooden rim */}
+              <div className="table-rim absolute -inset-2 sm:-inset-3 rounded-[50%]" aria-hidden />
+              {/* Felt with overhead spotlight */}
+              <div className="table-felt absolute inset-0 rounded-[50%] overflow-hidden" aria-hidden>
+                <div className="felt-noise absolute inset-0 opacity-[0.05]" />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      'radial-gradient(ellipse 60% 48% at 50% 28%, rgba(255, 238, 190, 0.17), transparent 70%)',
+                  }}
+                />
+                {/* Thin gold inner ring — clean, no text */}
+                <div className="absolute inset-6 sm:inset-8 rounded-[50%] border border-amber-200/15" />
+              </div>
 
-            {/* Thulla flash */}
-            {table.thullaFlash && !paused && (
-              <p
-                className="thulla-flash absolute left-1/2 top-[15%] -translate-x-1/2 z-20 text-amber-200 font-black text-sm sm:text-base text-center whitespace-nowrap bg-emerald-950/80 rounded-full px-4 py-1 border border-amber-300/40"
-                role="alert"
+              {/* Animated turn-flow arrow (anticlockwise) */}
+              <svg
+                className="absolute inset-0 h-full w-full pointer-events-none opacity-25"
+                viewBox="0 0 290 200"
+                aria-hidden
               >
-                {table.thullaFlash}
-              </p>
-            )}
+                <defs>
+                  <marker
+                    id="flow-arrow"
+                    markerWidth="7"
+                    markerHeight="7"
+                    refX="5"
+                    refY="3.5"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L7,3.5 L0,7 z" fill="#fcd34d" />
+                  </marker>
+                </defs>
+                <path
+                  d="M 136 181.4 A 122 82 0 1 0 154 181.4"
+                  fill="none"
+                  stroke="#fcd34d"
+                  strokeWidth="1.6"
+                  strokeDasharray="10 8"
+                  markerEnd="url(#flow-arrow)"
+                  className="flow-dash"
+                />
+              </svg>
 
-            {/* Trick cards at the centre */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              {displayPlays.length > 0 ? (
-                <>
-                  <div className="flex items-end justify-center" aria-live="polite">
-                    {displayPlays.map((p, i) => (
-                      <div
-                        key={`${p.seat}-${p.card.id}`}
-                        className="play-in -ml-6 first:ml-0 flex flex-col items-center"
-                        style={{ transform: `rotate(${(i - (displayPlays.length - 1) / 2) * 6}deg)` }}
-                      >
-                        <CardView card={p.card} />
-                        <span className="text-amber-100/90 text-[10px] font-semibold max-w-14 truncate mt-1 bg-black/60 rounded px-1">
-                          {match.seats[p.seat].name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {ledSuit && (
-                    <p className="mt-2 text-emerald-100/80 text-[11px] whitespace-nowrap bg-black/50 rounded-full px-3 py-0.5">
-                      Led suit: <span className="font-bold text-amber-200 capitalize">{ledSuit}</span>
-                      {showingCompleted && <span className="text-emerald-100/50"> · trick complete</span>}
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p className="text-emerald-100/50 text-sm px-8 text-center">
-                  {match.isFirstTrick ? 'Waiting for the A-spades opening…' : 'Waiting for the lead…'}
+              {/* Thulla flash banner */}
+              {thullaActive && (
+                <p
+                  className="thulla-flash absolute left-1/2 top-[12%] -translate-x-1/2 z-20 text-amber-200 font-black text-sm sm:text-base text-center whitespace-nowrap bg-emerald-950/85 rounded-full px-4 py-1 border border-amber-300/40"
+                  role="alert"
+                >
+                  {table.thullaFlash}
                 </p>
               )}
-            </div>
 
-            {/* Seats around the table */}
-            {match.seats.map((s, seat) => {
-              const { x, y } = seatPos(seat, match.numSeats);
-              const isTurn = turn === seat && match.phase !== 'finished';
-              return (
-                <SeatPod
-                  key={seat}
-                  x={x}
-                  y={y}
-                  name={s.name}
-                  line2={s.isBot ? `BOT · ${s.hand.length} cards` : `${s.hand.length} cards`}
-                  active={isTurn && !paused}
-                  escaped={s.escaped}
-                  isYou={seat === 0}
-                  timerPct={seat === 0 && myTurn ? timerPct : undefined}
-                  lowTime={secondsLeft <= 10}
-                />
-              );
-            })}
-
-            {/* Paused overlay */}
-            {paused && (
-              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-full bg-black/60 backdrop-blur-[2px]">
-                <p className="text-amber-100 font-black text-2xl mb-1">Paused</p>
-                <p className="text-emerald-100/60 text-sm mb-4">Take your time.</p>
-                <button
-                  type="button"
-                  onClick={() => table.togglePause()}
-                  className="rounded-xl bg-amber-300 px-6 py-2.5 font-black text-emerald-950 hover:bg-amber-200"
-                >
-                  ▶ Resume
-                </button>
+              {/* Trick cards at the centre, fanned towards each player */}
+              <div className="absolute inset-0 pointer-events-none">
+                {displayPlays.length > 0 ? (
+                  displayPlays.map((p, i) => {
+                    const o = trickOffset(p.seat, match.numSeats);
+                    const rot = (i - (displayPlays.length - 1) / 2) * 9;
+                    return (
+                      <div
+                        key={`${p.seat}-${p.card.id}`}
+                        className="absolute"
+                        style={{
+                          left: `${50 + o.x}%`,
+                          top: `${50 + o.y}%`,
+                          transform: 'translate(-50%, -50%)',
+                          zIndex: 10 + i,
+                        }}
+                      >
+                        <div className="play-in">
+                          <div style={{ transform: `rotate(${rot}deg)` }}>
+                            <CardView card={p.card} small />
+                            <span className="absolute left-1/2 top-full mt-0.5 -translate-x-1/2 whitespace-nowrap rounded bg-black/65 px-1.5 py-px text-[9px] font-semibold text-amber-100/90">
+                              {match.seats[p.seat].name}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-emerald-100/50 text-sm px-8 text-center whitespace-nowrap">
+                    {match.isFirstTrick ? 'Waiting for the A♠ opening…' : 'Waiting for the lead…'}
+                  </p>
+                )}
+                {ledSuit && displayPlays.length > 0 && (
+                  <p className="absolute left-1/2 top-[72%] -translate-x-1/2 whitespace-nowrap rounded-full bg-black/55 border border-white/10 px-3 py-0.5 text-emerald-100/80 text-[11px]">
+                    Led suit: <span className="font-bold text-amber-200 capitalize">{ledSuit}</span>
+                    {showingCompleted && <span className="text-emerald-100/50"> · trick complete</span>}
+                  </p>
+                )}
               </div>
-            )}
+
+              {/* Seats around the table (your seat is your hand, below) */}
+              {match.seats.map((s, seat) => {
+                if (seat === 0) return null;
+                const { x, y } = seatPos(seat, match.numSeats);
+                const isTurn = turn === seat && match.phase !== 'finished' && !paused;
+                return (
+                  <SeatPod
+                    key={seat}
+                    x={x}
+                    y={y}
+                    name={s.name}
+                    cards={s.hand.length}
+                    active={isTurn}
+                    escaped={s.escaped}
+                  />
+                );
+              })}
+
+              {/* Paused overlay */}
+              {paused && (
+                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-[50%] bg-black/60 backdrop-blur-[2px]">
+                  <p className="text-amber-100 font-black text-2xl mb-1">Paused</p>
+                  <p className="text-emerald-100/60 text-sm mb-4">Take your time.</p>
+                  <button
+                    type="button"
+                    onClick={() => table.togglePause()}
+                    className="flex items-center gap-2 rounded-xl bg-amber-300 px-6 py-2.5 font-black text-emerald-950 hover:bg-amber-200 active:scale-95 transition"
+                  >
+                    <Play size={16} /> Resume
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+
+          {/* ── Your hand: floating fan, part of the scene ── */}
+          <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 z-20">
+            <div className="relative flex flex-col items-center">
+              {/* Error / illegal-move toast */}
+              {error && (
+                <p
+                  className="absolute bottom-full mb-2 whitespace-nowrap rounded-lg bg-red-950/90 border border-red-700/60 px-3 py-1.5 text-red-100 text-xs font-semibold shadow-lg"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              )}
+
+              {/* Status pill */}
+              <div className="flex items-center gap-2 rounded-full bg-black/55 border border-white/10 backdrop-blur px-3 py-1">
+                <span className="text-amber-50 text-xs font-bold whitespace-nowrap">
+                  {nickname}
+                  {me.escaped && <span className="text-teal-300"> · escaped ✓</span>}
+                  {!me.escaped && (
+                    <span className="text-emerald-100/50 font-normal"> · {me.hand.length} cards</span>
+                  )}
+                </span>
+                <span className="w-px h-3 bg-white/15" aria-hidden />
+                <span className="text-emerald-100/70 text-xs whitespace-nowrap">
+                  {paused
+                    ? 'paused'
+                    : match.phase === 'finished'
+                      ? 'round over'
+                      : myTurn
+                        ? `${secondsLeft}s — tap a card`
+                        : 'waiting…'}
+                </span>
+              </div>
+
+              {/* Timer bar */}
+              {myTurn && !paused && match.phase !== 'finished' && (
+                <div
+                  className="mt-1.5 h-1 w-44 rounded bg-black/60 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={Math.round(timerPct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Your turn timer"
+                >
+                  <div
+                    className={`h-full transition-all duration-1000 ${
+                      secondsLeft <= 10 ? 'bg-red-400' : 'bg-amber-300'
+                    }`}
+                    style={{ width: `${timerPct}%` }}
+                  />
+                </div>
+              )}
+
+              {/* Hint */}
+              {myTurn && !paused && hint && (
+                <p className="mt-1 text-[11px] font-semibold text-amber-100/85 text-center px-4">
+                  {hint}
+                </p>
+              )}
+
+              {/* The fan */}
+              <div
+                className="flex justify-center items-end mt-1.5 px-2"
+                role="listbox"
+                aria-label="Your hand"
+              >
+                {sortedHand.map((c, i) => {
+                  const legal = myTurn && legalIds.has(c.id) && !paused;
+                  const rot = (i - (sortedHand.length - 1) / 2) * 4;
+                  return (
+                    <div
+                      key={c.id}
+                      role="option"
+                      aria-selected={false}
+                      className="shrink-0"
+                      style={{ marginLeft: i === 0 ? 0 : '-2.1rem', zIndex: i }}
+                    >
+                      <div
+                        className="deal-in"
+                        style={{ animationDelay: `${Math.min(i * 40, 500)}ms` }}
+                      >
+                        <div
+                          className={shakeId === c.id ? 'shake' : ''}
+                          style={{ transform: `rotate(${rot}deg)`, transformOrigin: '50% 130%' }}
+                        >
+                          <CardView
+                            card={c}
+                            small
+                            legal={legal}
+                            dimmed={myTurn && !legalIds.has(c.id)}
+                            onClick={() => tryPlay(c.id)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </main>
 
         {/* What's-happening panel (desktop) */}
-        <aside className="hidden lg:flex w-72 xl:w-80 shrink-0 flex-col min-h-0 border-l border-emerald-800/60 bg-black/25">
-          <div className="px-4 py-3 border-b border-emerald-800/60">
+        <aside className="hidden lg:flex w-72 xl:w-80 shrink-0 flex-col min-h-0 border-l border-white/10 bg-black/25 backdrop-blur">
+          <div className="px-4 py-3 border-b border-white/10">
             <p className="text-xs font-black tracking-[0.2em] text-teal-300/80 uppercase">
-              <span className="inline-block h-2 w-2 rounded-full bg-teal-300 mr-2 animate-pulse" aria-hidden />
+              <span
+                className="inline-block h-2 w-2 rounded-full bg-teal-300 mr-2 animate-pulse"
+                aria-hidden
+              />
               What's happening
             </p>
           </div>
@@ -408,7 +599,10 @@ export function TableScreen({ table, nickname, onLeave, onRematch }: Props) {
               <p className="text-emerald-100/70 text-xs mt-0.5">{status.sub}</p>
             </div>
           </div>
-          <ul className="flex-1 min-h-0 overflow-y-auto px-4 pb-3 space-y-1.5 text-xs" aria-label="Recent actions">
+          <ul
+            className="flex-1 min-h-0 overflow-y-auto px-4 pb-3 space-y-1.5 text-xs"
+            aria-label="Recent actions"
+          >
             {feedEvents.map((e, i) => (
               <li
                 key={`${i}-${e}`}
@@ -422,62 +616,17 @@ export function TableScreen({ table, nickname, onLeave, onRematch }: Props) {
               </li>
             ))}
           </ul>
+          <p className="px-4 py-2.5 border-t border-white/10 text-[11px] text-emerald-100/40">
+            Developed by <span className="text-amber-200/80 font-semibold">Zunair Qadeer</span>
+          </p>
         </aside>
       </div>
 
       {/* Compact status ticker (mobile) */}
-      <div className="lg:hidden shrink-0 h-8 flex items-center justify-center px-3 border-t border-emerald-800/40 bg-black/20">
+      <div className="lg:hidden shrink-0 h-8 flex items-center justify-center px-3 border-t border-white/10 bg-black/25">
         <p className="text-emerald-100/70 text-xs truncate" aria-live="polite">
           {status.title} — {status.sub}
         </p>
-      </div>
-
-      {/* Your hand — single tap plays immediately. */}
-      <div className="shrink-0 h-40 border-t border-amber-200/10 bg-black/30 px-3 sm:px-5 pt-1.5 pb-2 safe-bottom">
-        <div className="flex items-center justify-between mb-0.5 max-w-3xl mx-auto">
-          <p className="text-amber-50 text-sm font-bold truncate">
-            {nickname}
-            {me.escaped && <span className="text-teal-300 ml-2">escaped ✓</span>}
-            {!me.escaped && <span className="text-emerald-100/50 font-normal ml-2">{me.hand.length} cards</span>}
-          </p>
-          <p className="text-emerald-100/50 text-xs">
-            {paused
-              ? 'paused'
-              : myTurn
-                ? secondsLeft > 0
-                  ? `${secondsLeft}s — tap a card`
-                  : 'auto-playing…'
-                : 'waiting…'}
-          </p>
-        </div>
-        {error && (
-          <p className="text-red-200 bg-red-950/60 border border-red-800/60 rounded-lg px-3 py-1 text-xs mb-1 max-w-3xl mx-auto" role="alert">
-            {error}
-          </p>
-        )}
-        <div
-          className="flex -space-x-7 justify-[safe_center] overflow-x-auto pb-1 pt-1 max-w-3xl mx-auto px-1"
-          role="listbox"
-          aria-label="Your hand"
-        >
-          {sortedHand.map((c) => {
-            const legal = legalIds.has(c.id);
-            return (
-              <div key={c.id} role="option" aria-selected={false}>
-                <CardView
-                  card={c}
-                  legal={myTurn && legal && !paused}
-                  dimmed={myTurn && !legal}
-                  onClick={() => {
-                    if (!myTurn || paused) return;
-                    if (legal) table.playCard(0, c.id);
-                    else table.notify(illegalReason ?? 'Not your turn.');
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
       </div>
 
       {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BotDifficulty } from '@bhabi-thulla/game-engine';
-import { TableConfig } from '../game/useTable';
+import { TableConfig, SPEEDS } from '../game/useTable';
 
 interface Props {
   onStart: (config: TableConfig) => void;
@@ -89,7 +89,7 @@ export function HomeScreen({ onStart }: Props) {
           <button
             type="button"
             disabled={!valid}
-            onClick={() => valid && onStart({ nickname: name, numSeats, difficulty })}
+            onClick={() => valid && onStart({ nickname: name, numSeats, difficulty, pace: SPEEDS.relaxed })}
             className="w-full rounded-xl bg-amber-300 py-3 font-black text-emerald-950 text-lg tracking-wide transition hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Deal me in

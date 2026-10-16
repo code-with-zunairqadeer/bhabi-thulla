@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Match } from '@bhabi-thulla/game-engine';
-import { TableConfig, useTable } from '../game/useTable';
+import { TableConfig, useTable, GameSpeed, SPEEDS } from '../game/useTable';
 import { HomeScreen } from './HomeScreen';
 import { TableScreen } from './TableScreen';
 import { ResultsScreen } from './ResultsScreen';
@@ -10,16 +10,20 @@ type Screen = 'setup' | 'table' | 'results';
 
 function TableRoute({
   config,
+  speed,
+  onSpeedChange,
   onFinish,
   onLeave,
   onRematch,
 }: {
   config: TableConfig;
+  speed: GameSpeed;
+  onSpeedChange: (s: GameSpeed) => void;
   onFinish: (m: Match) => void;
   onLeave: () => void;
   onRematch: () => void;
 }) {
-  const table = useTable(config);
+  const table = useTable({ ...config, pace: SPEEDS[speed] });
   const finished = table.match.phase === 'finished';
 
   useEffect(() => {
@@ -29,7 +33,16 @@ function TableRoute({
     }
   }, [finished, onFinish, table.match]);
 
-  return <TableScreen table={table} nickname={config.nickname} onLeave={onLeave} onRematch={onRematch} />;
+  return (
+    <TableScreen
+      table={table}
+      nickname={config.nickname}
+      speed={speed}
+      onSpeedChange={onSpeedChange}
+      onLeave={onLeave}
+      onRematch={onRematch}
+    />
+  );
 }
 
 /** Bhabi Thulla inside the playground: setup → table → results. */
@@ -38,6 +51,7 @@ export function BhabiThullaGame() {
   const [config, setConfig] = useState<TableConfig | null>(null);
   const [gameKey, setGameKey] = useState(0);
   const [finalMatch, setFinalMatch] = useState<Match | null>(null);
+  const [speed, setSpeed] = useState<GameSpeed>('relaxed');
 
   const start = useCallback((c: TableConfig) => {
     setConfig(c);
@@ -63,7 +77,17 @@ export function BhabiThullaGame() {
   }, []);
 
   if (screen === 'table' && config) {
-    return <TableRoute key={gameKey} config={config} onFinish={finish} onLeave={goSetup} onRematch={rematch} />;
+    return (
+      <TableRoute
+        key={gameKey}
+        config={config}
+        speed={speed}
+        onSpeedChange={setSpeed}
+        onFinish={finish}
+        onLeave={goSetup}
+        onRematch={rematch}
+      />
+    );
   }
   if (screen === 'results' && finalMatch) {
     return <ResultsScreen match={finalMatch} onRematch={rematch} onHome={goSetup} />;
