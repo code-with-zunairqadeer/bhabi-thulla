@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Bhabi Thulla — premium social card-table theme.
+   Deep emerald/navy felt, ivory cards, restrained gold/teal accents. */
+
+.felt {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(20, 90, 70, 0.55), transparent 60%),
+    radial-gradient(900px 500px at 50% 110%, rgba(10, 40, 60, 0.6), transparent 60%),
+    linear-gradient(160deg, #0b3d2e 0%, #082a20 45%, #061e2b 100%);
+  color: #fefce8;
+}
+
+.panel {
+  background: rgba(4, 32, 24, 0.55);
+  border: 1px solid rgba(20, 120, 90, 0.35);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(6px);
+}
+
+.card-ivory {
+  background: linear-gradient(165deg, #fffdf5 0%, #f7f0dc 55%, #efe4c8 100%);
+  border-color: #d8c9a3;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.card-legal {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35), 0 0 0 1.5px rgba(252, 211, 77, 0.55),
+    0 0 14px rgba(252, 211, 77, 0.18);
+}
+
+.card-back {
+  background:
+    repeating-linear-gradient(45deg, rgba(45, 140, 110, 0.5) 0 6px, rgba(12, 60, 45, 0.9) 6px 12px),
+    linear-gradient(160deg, #0e5a40, #083322);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 0 0 2px rgba(252, 211, 77, 0.25);
+}
+
+@keyframes play-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.play-in {
+  animation: play-in 180ms ease-out;
+}
+
+@keyframes thulla-flash {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.92; }
+}
+.thulla-flash {
+  animation: thulla-flash 700ms ease-in-out 2;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .play-in, .thulla-flash { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+/* Phone safe-area padding for the hand bar. */
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Slim scrollbars for hand/opponent rails. */
+::-webkit-scrollbar { height: 6px; width: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(252, 211, 77, 0.25); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
