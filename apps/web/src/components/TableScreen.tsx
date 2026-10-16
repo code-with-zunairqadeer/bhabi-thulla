@@ -369,7 +369,11 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
             {error}
           </p>
         )}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 max-w-xl mx-auto" role="listbox" aria-label="Your hand">
+        <div
+          className="flex -space-x-7 justify-[safe_center] overflow-x-auto pb-1 pt-1 max-w-3xl mx-auto px-1"
+          role="listbox"
+          aria-label="Your hand"
+        >
           {sortedHand.map((c) => {
             const legal = legalIds.has(c.id);
             return (
