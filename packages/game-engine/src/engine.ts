@@ -7,7 +7,7 @@ import {
   Card, Suit, createDeck, shuffle, isAceOfSpades, Rng,
 } from './cards.js';
 import {
-  RulesConfig, CLASSIC_RULES, TrickPlay, legalPlays, trickWinnerSeat, isThullaPlay,
+  RulesConfig, CLASSIC_RULES, TrickPlay, legalPlays, trickWinnerSeat,
 } from './rules.js';
 
 export interface Seat {
@@ -70,6 +70,12 @@ export class Match {
   tricksPlayed = 0;
   /** Tricks since the last escape; diagnostics for no-progress cycles. */
   tricksWithoutProgress = 0;
+  /**
+   * Publicly known voids, as "seat:suit". Breaking suit is public information:
+   * everyone at the table sees the seat had none of the led suit. Good players
+   * (and our bots) remember it. Reset with every new Match.
+   */
+  readonly voids = new Set<string>();
   /** Human-readable public action feed. */
   events: string[] = [];
 
@@ -167,8 +173,12 @@ export class Match {
     t.plays.push({ seat, card });
     t.nextToPlay += 1;
 
+    // Breaking suit is public: the seat is now known void in the led suit.
+    const brokeSuit = !isLead && card.suit !== (t.ledSuit as Suit);
+    if (brokeSuit) this.voids.add(`${seat}:${t.ledSuit}`);
+
     const protectedOpening = this.isFirstTrick && this.rules.opening === 'protected';
-    const thulla = !protectedOpening && isThullaPlay(card, t.ledSuit as Suit, isLead);
+    const thulla = !protectedOpening && brokeSuit;
 
     const result: PlayResult = {
       seat, card, thulla,

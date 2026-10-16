@@ -9,7 +9,7 @@ import {
 } from '../src/cards.js';
 import { trickWinnerSeat, PROTECTED_OPENING_RULES } from '../src/rules.js';
 import { Match } from '../src/engine.js';
-import { observe, easyBot, normalBot } from '../src/bots.js';
+import { observe, easyBot, normalBot, BotObservation } from '../src/bots.js';
 
 const C = (rank: string | number, suit: Suit): Card => makeCard(suit, rank as Rank);
 
@@ -333,14 +333,103 @@ describe('bots', () => {
     }
   });
 
-  it('observations expose no hidden cards', () => {
+  it('observation carries seat and voids but exposes no hidden cards', () => {
     const m = new Match({ numSeats: 4, rng: mulberry32(5) });
     const obs = observe(m, 0);
+    expect(obs.seat).toBe(0);
+    expect(obs.knownVoids instanceof Set).toBe(true);
     const json = JSON.stringify(obs);
     for (let s = 1; s < 4; s++) {
       for (const c of m.seats[s].hand) {
         expect(json).not.toContain(c.id);
       }
     }
+  });
+});
+
+describe('known voids', () => {
+  it('records a void when a player breaks suit', () => {
+    const m = new Match({
+      numSeats: 4,
+      preDeal: [
+        [C('A', 'spades'), C('K', 'hearts')],
+        [C('3', 'clubs')],
+        [C('A', 'hearts')],
+        [C('5', 'hearts')],
+      ],
+    });
+    m.isFirstTrick = false;
+    m.startTrick(0);
+    m.playCard(0, 'K-hearts');
+    m.playCard(1, '3-clubs'); // no hearts -> void revealed
+    expect(m.voids.has('1:hearts')).toBe(true);
+    expect(m.voids.has('0:hearts')).toBe(false);
+  });
+
+  it('records voids even on the protected opening trick', () => {
+    const m = new Match({
+      numSeats: 4,
+      rules: PROTECTED_OPENING_RULES,
+      preDeal: [
+        [C('A', 'spades'), C('9', 'hearts')],
+        [C('5', 'clubs'), C('6', 'clubs')],
+        [C('7', 'hearts'), C('7', 'clubs')],
+        [C('8', 'hearts'), C('8', 'clubs')],
+      ],
+    });
+    m.playCard(0, 'A-spades');
+    m.playCard(1, '5-clubs'); // no spades -> void revealed, no Thulla (protected)
+    expect(m.voids.has('1:spades')).toBe(true);
+  });
+
+  function leadObs(knownVoids: Set<string>): BotObservation {
+    return {
+      seat: 0,
+      ownHand: [C('K', 'spades'), C('A', 'hearts')],
+      legalPlays: [C('K', 'spades'), C('A', 'hearts')],
+      ledSuit: null,
+      trickPlays: [],
+      handCounts: [2, 5, 5, 5],
+      escaped: [false, false, false, false],
+      knownVoids,
+    };
+  }
+
+  it('normalBot avoids leading a suit where an opponent is known void', () => {
+    // Seat 1 is void in spades: leading the K-spades would hand them the
+    // power to stop the round and make us pick the pile up.
+    expect(normalBot(leadObs(new Set(['1:spades']))).id).toBe('A-hearts');
+  });
+
+  it('normalBot leads low when every suit has a known void', () => {
+    const obs = leadObs(new Set(['1:spades', '2:hearts']));
+    expect(normalBot(obs).id).toBe('K-spades'); // lower of K-spades / A-hearts
+  });
+
+  it('normalBot ignores voids of escaped players', () => {
+    const obs: BotObservation = {
+      ...leadObs(new Set(['1:spades'])),
+      escaped: [false, true, false, false],
+    };
+    expect(normalBot(obs).id).toBe('A-hearts'); // seat 1 is out; spades safe again -> shed highest
+  });
+
+  it('voids are visible to bots through observe() after a real Thulla', () => {
+    const m = new Match({
+      numSeats: 4,
+      preDeal: [
+        [C('A', 'spades'), C('K', 'hearts')],
+        [C('3', 'clubs')],
+        [C('A', 'hearts')],
+        [C('5', 'hearts')],
+      ],
+    });
+    m.isFirstTrick = false;
+    m.startTrick(0);
+    m.playCard(0, 'K-hearts');
+    m.playCard(1, '3-clubs'); // Thulla; seat 2 (bot) now leads
+    const botSeat = m.turnSeat() as number;
+    const obs = observe(m, botSeat);
+    expect(obs.knownVoids.has('1:hearts')).toBe(true);
   });
 });

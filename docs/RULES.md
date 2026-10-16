@@ -2,6 +2,21 @@
 
 > Proposed defaults. Visible and versioned per the product brief; household
 > confirmation can adjust them before launch. Each match records its ruleset version.
+>
+> Core rules verified 2026-10-16 against public sources:
+> - https://thulaa.com/how-to-play — A-spades opens; follow suit; off-suit Thulla
+>   stops the trick and the highest card of the led suit picks up the pile and
+>   leads; all-follow tricks are discarded; empty hand = safe; last holding
+>   cards = the loser.
+> - https://bhabhi.asia/rules — same core; additionally notes that failing to
+>   follow is **public information good players remember** (our bots track known
+>   voids), and documents household variants: protected opening round, asking
+>   for hands, playing into a stopped round, and a two-player shoot-out.
+>
+> This implementation follows the product brief's Classic preset: the brief
+> explicitly excludes hand-asking, playing into stopped rounds, and shoot-outs.
+> The protected-opening variant is implemented and configurable because
+> bhabhi.asia plays it as standard.
 
 ## Setup
 
@@ -57,11 +72,16 @@ with no hearts. Thulla! The A-hearts player collects all four cards and leads.
 ## Bots (house table rules for bots)
 
 - Bots see only their own hand plus public information (played cards, hand
-  counts, escapes). They never inspect opponents' hands and never influence
-  the shuffle.
-- **Easy** plays a random legal card. **Normal** sheds high cards when leading,
-  plays low when following (to avoid becoming a pickup recipient), and sheds
-  high when forced off-suit.
+  counts, escapes, and publicly known voids). They never inspect opponents'
+  hands and never influence the shuffle.
+- A void becomes public the moment a player breaks suit — the engine records
+  it and the observation exposes it, because good players remember who is
+  void (bhabhi.asia/rules).
+- **Easy** plays a random legal card. **Normal** sheds its highest card when
+  leading a suit nobody is known void in; avoids leading suits with known
+  voids (leading into a void hands the void player the power to stop the
+  round, and a high lead card would pick the pile up); leads low when every
+  suit is dangerous; plays low when following; sheds high when forced off-suit.
 
 ## What Classic does NOT include
 

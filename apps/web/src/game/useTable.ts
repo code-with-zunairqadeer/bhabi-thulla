@@ -16,8 +16,10 @@ export interface TableConfig {
 
 /** Practice-table turn timer (seconds). Matches the brief's default. */
 export const TURN_SECONDS = 30;
-/** Bot "thinking" delay so play is understandable. */
-const BOT_DELAY_MS = 1100;
+/** Delay before a bot plays, so humans can follow the action. */
+const BOT_DELAY_MS = 1700;
+/** Extra beat after a trick completes, so the result stays visible. */
+const POST_TRICK_PAUSE_MS = 1600;
 
 export interface TableState {
   match: Match;
@@ -34,9 +36,10 @@ export interface TableState {
   playCard: (seat: number, cardId: string) => void;
 }
 
+const BOT_NAMES = ['Alpha Bot', 'Beta Bot', 'Gamma Bot', 'Delta Bot', 'Echo Bot', 'Foxx Bot'];
+
 function botNames(n: number): string[] {
-  const pool = ['Ali', 'Ahmed', 'Bilal', 'Usman', 'Danish', 'Fahad', 'Imran', 'Kamran'];
-  return Array.from({ length: n }, (_, i) => pool[i % pool.length]);
+  return Array.from({ length: n }, (_, i) => BOT_NAMES[i % BOT_NAMES.length]);
 }
 
 export function useTable(config: TableConfig): TableState {
@@ -56,6 +59,12 @@ export function useTable(config: TableConfig): TableState {
   const [error, setError] = useState<string | null>(null);
   /** Index into match.events of a Thulla announcement to flash until next play. */
   const [thullaFlashIdx, setThullaFlashIdx] = useState<number | null>(null);
+  /** When the current turn started (for pacing bot moves). */
+  const turnStartedAt = useRef<number>(Date.now());
+  /** Bots wait until this timestamp after a trick completes. */
+  const pauseUntil = useRef<number>(0);
+  /** Guards against retry-spam if the engine ever rejects a bot move. */
+  const attemptedMove = useRef<string | null>(null);
   const errorTimer = useRef<number | null>(null);
 
   const turn = match.turnSeat();
@@ -80,6 +89,8 @@ export function useTable(config: TableConfig): TableState {
         const r = match.playCard(seat, cardId);
         setLastResult(r);
         if (r.thulla) setThullaFlashIdx(match.events.length - 1);
+        // Let the trick result breathe before the next trick's lead.
+        if (r.trickComplete) pauseUntil.current = Date.now() + POST_TRICK_PAUSE_MS;
       } catch (e) {
         flashError(e instanceof Error ? e.message : 'Illegal move');
         return;
@@ -101,16 +112,34 @@ export function useTable(config: TableConfig): TableState {
     if (selectedId && turn === 0) playCard(0, selectedId);
   }, [selectedId, turn, playCard]);
 
-  // Bot turns run on a server-style scheduled delay.
+  // Restart the turn clock whenever the turn advances.
   useEffect(() => {
-    if (match.phase === 'finished' || turn === null) return;
-    if (!match.seats[turn].isBot) return;
-    const id = window.setTimeout(() => {
-      const card: Card = chooseBotMove(observe(match, turn), config.difficulty);
-      playCard(turn, card.id);
-    }, BOT_DELAY_MS);
-    return () => window.clearTimeout(id);
-  }, [match, turn, moveCount, config.difficulty, playCard]);
+    turnStartedAt.current = Date.now();
+  }, [turn, moveCount]);
+
+  // Bot driver: a watchdog interval instead of one-shot timeouts, so a bot
+  // can never get stuck. Every tick it asks: is it a bot's turn, and has the
+  // pacing delay elapsed? The engine state is read live, so missed or failed
+  // turns are impossible by construction.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (match.phase === 'finished') return;
+      const t = match.turnSeat();
+      if (t === null || !match.seats[t].isBot) return;
+      const wait = Math.max(BOT_DELAY_MS, pauseUntil.current - Date.now());
+      if (Date.now() - turnStartedAt.current < wait) return;
+      const key = `${t}:${moveCount}`;
+      if (attemptedMove.current === key) return;
+      attemptedMove.current = key;
+      try {
+        const card: Card = chooseBotMove(observe(match, t), config.difficulty);
+        playCard(t, card.id);
+      } catch (e) {
+        flashError(e instanceof Error ? e.message : 'Bot failed to play');
+      }
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [match, config.difficulty, playCard, moveCount, flashError]);
 
   // Human turn timer; timeout auto-plays a sensible move.
   useEffect(() => {

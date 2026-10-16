@@ -90,8 +90,8 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
               } ${s.escaped ? 'opacity-50' : ''}`}
             >
               <div className="min-w-0">
-                <p className="text-amber-50 text-xs font-bold truncate max-w-20">
-                  {s.name} <span className="text-teal-300/70 font-semibold">· bot</span>
+                <p className="text-amber-50 text-xs font-bold truncate max-w-24">
+                  {s.name}
                 </p>
                 <p className="text-emerald-100/60 text-[11px]">
                   {s.escaped ? <span className="text-teal-300 font-semibold">escaped ✓</span> : `${s.hand.length} cards`}
