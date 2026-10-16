@@ -99,12 +99,11 @@
   animation: table-shake 420ms ease;
 }
 
-/* Turn-flow arrow: dashes march anticlockwise around the table. */
-@keyframes dash-march {
-  to { stroke-dashoffset: -36; }
-}
-.flow-dash {
-  animation: dash-march 1.4s linear infinite;
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .play-in, .thulla-flash, .deal-in, .shake, .table-shake { animation: none; }
+  .animate-ping, .animate-pulse { animation: none; }
+  * { transition-duration: 0.01ms !important; }
 }
 
 @keyframes thulla-flash {
@@ -114,13 +113,6 @@
 .thulla-flash {
   animation: thulla-flash 700ms ease-in-out 2;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
-}
-
-/* Respect users who prefer reduced motion. */
-@media (prefers-reduced-motion: reduce) {
-  .play-in, .thulla-flash, .deal-in, .shake, .table-shake, .flow-dash { animation: none; }
-  .animate-ping, .animate-pulse { animation: none; }
-  * { transition-duration: 0.01ms !important; }
 }
 
 /* Phone safe-area padding for the hand bar. */

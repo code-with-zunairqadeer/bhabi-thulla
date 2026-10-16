@@ -18,8 +18,6 @@ import { rankValue } from '@bhabi-thulla/game-engine';
 import { TableState, TURN_SECONDS, GameSpeed, SPEEDS } from '../game/useTable';
 import {
   clickSound,
-  playCardSound,
-  thullaSound,
   turnSound,
   isMuted,
   setMuted,
@@ -59,11 +57,6 @@ function seatPos(seat: number, numSeats: number): { x: number; y: number } {
 function trickOffset(seat: number, numSeats: number): { x: number; y: number } {
   const angle = ((90 - (seat * 360) / numSeats) * Math.PI) / 180;
   return { x: 16 * Math.cos(angle), y: 20 * Math.sin(angle) };
-}
-
-/** Seat angle in degrees on the table ellipse (90° = bottom, seat 0). */
-function seatAngleDeg(seat: number, numSeats: number): number {
-  return 90 - (seat * 360) / numSeats;
 }
 
 function SeatPod({
@@ -237,11 +230,6 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
     if (!next) clickSound();
   };
 
-  // Cheeky womp whenever a Thulla lands.
-  useEffect(() => {
-    if (table.thullaFlash) thullaSound();
-  }, [table.thullaFlash]);
-
   // Gentle chime when the turn comes to you.
   useEffect(() => {
     if (myTurn && !paused && !prevMyTurn.current) turnSound();
@@ -281,30 +269,9 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
 
   const thullaActive = !!table.thullaFlash && !paused;
 
-  // Turn-flow arrow: a near-full ellipse hugging the wooden rim, with its
-  // arrowhead landing exactly on the active seat — the flow visibly points at
-  // whose turn it is.
-  const activeSeat = turn !== null && match.phase !== 'finished' ? turn : null;
-  const ARX = 134;
-  const ARY = 93;
-  const ACX = 145;
-  const ACY = 100;
-  const flowArc = (() => {
-    if (activeSeat === null || paused) return null;
-    const endDeg = seatAngleDeg(activeSeat, match.numSeats);
-    const startDeg = endDeg + 300; // 300° of travel, ending at the active seat
-    const rad = (d: number) => (d * Math.PI) / 180;
-    const sx = ACX + ARX * Math.cos(rad(startDeg));
-    const sy = ACY + ARY * Math.sin(rad(startDeg));
-    const ex = ACX + ARX * Math.cos(rad(endDeg));
-    const ey = ACY + ARY * Math.sin(rad(endDeg));
-    return `M ${sx.toFixed(1)} ${sy.toFixed(1)} A ${ARX} ${ARY} 0 1 0 ${ex.toFixed(1)} ${ey.toFixed(1)}`;
-  })();
-
   const tryPlay = (cardId: string) => {
     if (!myTurn || paused) return;
     if (legalIds.has(cardId)) {
-      playCardSound();
       table.playCard(0, cardId);
     } else {
       table.notify(illegalReason ?? 'Not your turn.');
@@ -461,37 +428,34 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
                 <div className="absolute inset-6 sm:inset-8 rounded-[50%] border border-amber-200/15" />
               </div>
 
-              {/* Turn-flow arrow: hugs the oval rim, arrowhead lands on the active seat */}
-              {flowArc && (
-                <svg
-                  className="absolute inset-0 h-full w-full pointer-events-none opacity-30"
-                  viewBox="0 0 290 200"
-                  aria-hidden
-                >
-                  <defs>
-                    <marker
-                      id="flow-arrow"
-                      markerWidth="7"
-                      markerHeight="7"
-                      refX="5"
-                      refY="3.5"
-                      orient="auto"
-                    >
-                      <path d="M0,0 L7,3.5 L0,7 z" fill="#fcd34d" />
-                    </marker>
-                  </defs>
-                  <path
-                    d={flowArc}
-                    fill="none"
-                    stroke="#fcd34d"
-                    strokeWidth="1.8"
-                    strokeDasharray="10 8"
-                    strokeLinecap="round"
-                    markerEnd="url(#flow-arrow)"
-                    className="flow-dash"
-                  />
-                </svg>
-              )}
+              {/* Turn-flow arrow: a full, still oval hugging the rim — direction only */}
+              <svg
+                className="absolute inset-0 h-full w-full pointer-events-none opacity-30"
+                viewBox="0 0 290 200"
+                aria-hidden
+              >
+                <defs>
+                  <marker
+                    id="flow-arrow"
+                    markerWidth="7"
+                    markerHeight="7"
+                    refX="5"
+                    refY="3.5"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L7,3.5 L0,7 z" fill="#fcd34d" />
+                  </marker>
+                </defs>
+                <path
+                  d="M 145 193 A 134 93 0 0 0 145 7 A 134 93 0 0 0 145 193"
+                  fill="none"
+                  stroke="#fcd34d"
+                  strokeWidth="1.8"
+                  strokeDasharray="10 8"
+                  strokeLinecap="round"
+                  markerEnd="url(#flow-arrow)"
+                />
+              </svg>
 
               {/* Thulla flash banner */}
               {thullaActive && (
@@ -530,9 +494,15 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
                     </div>
                   );
                 })}
-                {displayPlays.length === 0 && (
-                  <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-emerald-100/50 text-sm px-8 text-center whitespace-nowrap">
-                    {match.isFirstTrick ? 'Waiting for the A♠ opening…' : 'Waiting for the lead…'}
+                {displayPlays.length === 0 && match.phase !== 'finished' && (
+                  <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-emerald-100/60 text-sm px-8 text-center whitespace-nowrap">
+                    {myTurn
+                      ? match.isFirstTrick
+                        ? 'You hold the A♠ — open with it.'
+                        : 'Your lead — tap any card.'
+                      : match.isFirstTrick
+                        ? `${turnName} opens with the A♠…`
+                        : `${turnName} leads…`}
                   </p>
                 )}
               </div>

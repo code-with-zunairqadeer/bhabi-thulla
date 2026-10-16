@@ -9,6 +9,7 @@ import {
   observe,
   chooseBotMove,
 } from '@bhabi-thulla/game-engine';
+import { playCardSound, thullaSound } from './sound';
 
 /** Game speeds: how long bots wait before playing and how long a finished
  *  trick stays on screen. Relaxed is the default so new players can follow. */
@@ -83,6 +84,8 @@ export function useTable(config: TableConfig): TableState {
   /** Guards against retry-spam if the engine ever rejects a bot move. */
   const attemptedMove = useRef<string | null>(null);
   const errorTimer = useRef<number | null>(null);
+  /** Clears the finished trick off the table once its result has been seen. */
+  const wipeTimer = useRef<number | null>(null);
 
   const turn = match.turnSeat();
 
@@ -106,14 +109,30 @@ export function useTable(config: TableConfig): TableState {
   const playCard = useCallback(
     (seat: number, cardId: string) => {
       setThullaFlashIdx(null);
+      if (wipeTimer.current) {
+        window.clearTimeout(wipeTimer.current);
+        wipeTimer.current = null;
+      }
       try {
         const r = match.playCard(seat, cardId);
         setLastResult(r);
-        if (r.thulla) setThullaFlashIdx(match.events.length - 1);
+        playCardSound(); // every card hitting the felt snaps — human and bots
+        if (r.thulla) {
+          setThullaFlashIdx(match.events.length - 1);
+          // Let the snap land first, then the cheeky womp.
+          window.setTimeout(() => thullaSound(), 180);
+        }
         // Keep the finished trick on screen until the next card is played.
         setCompletedTrick(r.trickComplete ? r.completedTrick : null);
-        // Let the trick result breathe before the next trick's lead.
-        if (r.trickComplete) pauseUntil.current = Date.now() + config.pace.postTrickMs;
+        if (r.trickComplete) {
+          // Let the trick result breathe, then wipe the table clean — the
+          // next lead starts on an empty table.
+          pauseUntil.current = Date.now() + config.pace.postTrickMs;
+          wipeTimer.current = window.setTimeout(() => {
+            setCompletedTrick(null);
+            wipeTimer.current = null;
+          }, config.pace.postTrickMs);
+        }
       } catch (e) {
         flashError(e instanceof Error ? e.message : 'Illegal move');
         return;
@@ -122,6 +141,14 @@ export function useTable(config: TableConfig): TableState {
     },
     [match, refresh, flashError, config.pace],
   );
+
+  // Clear pending timers on unmount.
+  useEffect(() => {
+    return () => {
+      if (wipeTimer.current) window.clearTimeout(wipeTimer.current);
+      if (errorTimer.current) window.clearTimeout(errorTimer.current);
+    };
+  }, []);
 
   // Restart the turn clock whenever the turn advances.
   useEffect(() => {

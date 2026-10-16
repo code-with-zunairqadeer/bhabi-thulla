@@ -86,34 +86,48 @@ export function clickSound(): void {
   o.stop(t + 0.09);
 }
 
-/** Cheeky descending womp for a Thulla — part slide-whistle, part sad trombone. */
+/**
+ * Warm and cheeky Thulla sting: a playful "whee!" up, then a wobbly,
+ * warm "boing" down. Triangle/sine only — no harsh buzz.
+ */
 export function thullaSound(): void {
   if (muted) return;
   const c = ac();
   if (!c) return;
   const t = c.currentTime;
-  const glide = (
-    type: OscillatorType,
-    f0: number,
-    f1: number,
-    delay: number,
-    dur: number,
-    peak: number,
-  ) => {
-    const o = c.createOscillator();
-    o.type = type;
-    o.frequency.setValueAtTime(f0, t + delay);
-    o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + delay + dur);
-    const g = c.createGain();
-    envelope(g, t + delay, peak, dur);
-    o.connect(g);
-    g.connect(c.destination);
-    o.start(t + delay);
-    o.stop(t + delay + dur + 0.05);
-  };
-  glide('sawtooth', 520, 160, 0, 0.45, 0.15);
-  glide('sawtooth', 392, 110, 0.12, 0.5, 0.13);
-  glide('sine', 1040, 320, 0, 0.3, 0.05);
+
+  // Cheeky rising "whee!"
+  const whee = c.createOscillator();
+  whee.type = 'triangle';
+  whee.frequency.setValueAtTime(420, t);
+  whee.frequency.exponentialRampToValueAtTime(940, t + 0.22);
+  const wheeGain = c.createGain();
+  envelope(wheeGain, t, 0.16, 0.26);
+  whee.connect(wheeGain);
+  wheeGain.connect(c.destination);
+  whee.start(t);
+  whee.stop(t + 0.3);
+
+  // Warm wobbly "boing" down, with a gentle vibrato.
+  const boing = c.createOscillator();
+  boing.type = 'sine';
+  boing.frequency.setValueAtTime(680, t + 0.16);
+  boing.frequency.exponentialRampToValueAtTime(170, t + 0.78);
+  const lfo = c.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 9;
+  const lfoGain = c.createGain();
+  lfoGain.gain.value = 26;
+  lfo.connect(lfoGain);
+  lfoGain.connect(boing.frequency);
+  const boingGain = c.createGain();
+  envelope(boingGain, t + 0.16, 0.2, 0.66);
+  boing.connect(boingGain);
+  boingGain.connect(c.destination);
+  boing.start(t + 0.16);
+  boing.stop(t + 0.9);
+  lfo.start(t + 0.16);
+  lfo.stop(t + 0.9);
 }
 
 /** Gentle two-note chime when your turn arrives. */
