@@ -86,7 +86,7 @@ function SeatPod({
         } ${escaped ? 'opacity-45 grayscale' : ''}`}
       >
         <div
-          className={`relative flex h-11 w-11 items-center justify-center rounded-full font-black text-base transition-all ${
+          className={`relative flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-full font-black text-sm sm:text-base transition-all ${
             active
               ? 'bg-gradient-to-br from-amber-200 to-amber-400 text-emerald-950 ring-2 ring-amber-100 shadow-[0_0_30px_rgba(252,211,77,0.75)]'
               : 'bg-gradient-to-br from-emerald-800 to-emerald-950 text-amber-100 ring-1 ring-amber-200/30 shadow-[0_4px_10px_rgba(0,0,0,0.5)]'
@@ -100,8 +100,15 @@ function SeatPod({
             </span>
           )}
           {name.charAt(0).toUpperCase()}
+          {/* Card-count badge for small screens (name chip is hidden there) */}
+          <span
+            className="sm:hidden absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/70 border border-white/15 px-1.5 py-px text-[9px] font-bold text-amber-100/90 whitespace-nowrap"
+            aria-hidden
+          >
+            {escaped ? '✓' : cards}
+          </span>
         </div>
-        <div className="mt-1 rounded-full bg-black/60 border border-white/10 backdrop-blur px-2 py-0.5 text-center leading-tight">
+        <div className="mt-1 hidden sm:block rounded-full bg-black/60 border border-white/10 backdrop-blur px-2 py-0.5 text-center leading-tight">
           <p
             className={`max-w-20 truncate text-[10px] font-bold ${
               active ? 'text-amber-200' : 'text-amber-50/90'
@@ -122,11 +129,13 @@ function ToolButton({
   title,
   label,
   onClick,
+  compact,
   children,
 }: {
   title: string;
   label?: string;
   onClick: () => void;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -138,10 +147,12 @@ function ToolButton({
         clickSound();
         onClick();
       }}
-      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95"
+      className={`flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95 ${
+        compact ? 'p-2.5 justify-center' : 'px-2.5 py-1.5'
+      }`}
     >
       {children}
-      {label && <span className="hidden md:inline">{label}</span>}
+      {label && !compact && <span className="hidden md:inline">{label}</span>}
     </button>
   );
 }
@@ -235,6 +246,24 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
     if (myTurn && !paused && !prevMyTurn.current) turnSound();
     prevMyTurn.current = myTurn && !paused;
   }, [myTurn, paused]);
+
+  // Viewport width: drives the mobile layout and keeps the hand fan on screen.
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1024));
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isMobileLayout = vw < 768;
+
+  // Hand fan geometry: shrink the overlap so every card fits the viewport,
+  // however many cards pile up after Thullas.
+  const HAND_CARD_W = 56; // CardView small width, px
+  const handAvailW = Math.min(vw * 0.96, 620);
+  const handStep =
+    sortedHand.length <= 1
+      ? HAND_CARD_W
+      : Math.min(26, Math.max(13, (handAvailW - HAND_CARD_W) / (sortedHand.length - 1)));
   const ledSuit = displayLedSuit;
   const mustFollow = ledSuit !== null && me.hand.some((c) => c.suit === ledSuit);
   const hint = !myTurn
@@ -280,123 +309,145 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
     }
   };
 
-  return (
-    <div className="felt h-dvh flex flex-col overflow-hidden">
-      {/* ── Toolbar ─────────────────────────────────────────── */}
-      <header className="h-12 shrink-0 z-30 flex items-center gap-2 px-3 border-b border-white/10 bg-black/40 backdrop-blur">
-        <Link
-          to="/"
-          onClick={() => clickSound()}
-          className="flex items-center gap-0.5 text-emerald-100/70 text-sm font-semibold hover:text-amber-200 whitespace-nowrap"
-        >
-          <ChevronLeft size={16} />
-          <span className="hidden sm:inline">Playground</span>
-        </Link>
-        <div className="w-px h-5 bg-white/10" aria-hidden />
-        <h1 className="font-black text-amber-100 tracking-wide text-sm whitespace-nowrap">
-          Bhabi Thulla
-        </h1>
-        <p className="hidden xl:block text-[11px] text-emerald-100/45 whitespace-nowrap">
-          Developed by <span className="text-amber-200/80 font-semibold">Zunair Qadeer</span>
-        </p>
+  // Every action button, rendered once for desktop and once (compact,
+  // thumb-sized) for the mobile action row. Nothing hides in a menu.
+  const toolbarActions = (compact: boolean) => (
+    <>
+      <ToolButton
+        compact={compact}
+        title={paused ? 'Resume the game' : 'Pause the game'}
+        label={paused ? 'Resume' : 'Pause'}
+        onClick={() => table.togglePause()}
+      >
+        {paused ? <Play size={compact ? 18 : 14} /> : <Pause size={compact ? 18 : 14} />}
+      </ToolButton>
+      <ToolButton
+        compact={compact}
+        title="Restart this round with a fresh deal"
+        label="Restart"
+        onClick={onRematch}
+      >
+        <RotateCcw size={compact ? 18 : 14} />
+      </ToolButton>
+      <ToolButton compact={compact} title="How to play" label="Rules" onClick={() => setRulesOpen(true)}>
+        <BookOpen size={compact ? 18 : 14} />
+      </ToolButton>
 
-        {/* Turn indicator */}
-        {/* Turn indicator + led-suit badge (header: nothing can overlap it here) */}
-        <div aria-live="polite" className="flex-1 flex justify-center items-center gap-2 min-w-0">
-          {match.phase === 'finished' ? (
-            <span className="text-emerald-100/60 text-xs font-semibold">Round over</span>
-          ) : myTurn && !paused ? (
-            <span className="animate-pulse rounded-full bg-amber-300 px-4 py-1 text-emerald-950 text-xs font-black tracking-wide shadow-[0_0_16px_rgba(252,211,77,0.5)] whitespace-nowrap">
-              YOUR TURN{secondsLeft <= 10 ? ` · ${secondsLeft}s` : ''}
-            </span>
-          ) : (
-            <span className="rounded-full border border-emerald-700/60 bg-emerald-950/60 px-4 py-1 text-emerald-100/80 text-xs font-semibold truncate max-w-full">
-              {paused ? 'Paused' : `${turnName}'s turn…`}
-            </span>
-          )}
-          {ledSuit && displayPlays.length > 0 && match.phase !== 'finished' && (
-            <span
-              title={`Led suit: ${ledSuit}${showingCompleted ? ' (trick complete)' : ''}`}
-              className="rounded-full border border-amber-200/30 bg-black/40 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap"
-            >
-              <span className={RED_SUITS.has(ledSuit) ? 'text-red-300' : 'text-amber-100'}>
-                {SUIT_GLYPH[ledSuit]}
-              </span>{' '}
-              <span className="text-amber-200/90 capitalize">{ledSuit}</span>
-            </span>
-          )}
-        </div>
-
-        {/* Action buttons — always visible, no hidden menu */}
-        <div className="flex items-center gap-1.5">
-          <ToolButton
-            title={paused ? 'Resume the game' : 'Pause the game'}
-            label={paused ? 'Resume' : 'Pause'}
-            onClick={() => table.togglePause()}
-          >
-            {paused ? <Play size={14} /> : <Pause size={14} />}
-          </ToolButton>
-          <ToolButton title="Restart this round with a fresh deal" label="Restart" onClick={onRematch}>
-            <RotateCcw size={14} />
-          </ToolButton>
-          <ToolButton title="How to play" label="Rules" onClick={() => setRulesOpen(true)}>
-            <BookOpen size={14} />
-          </ToolButton>
-
-          {/* Speed control */}
-          <div
-            className="flex rounded-lg border border-white/10 bg-white/5 p-0.5"
-            role="group"
-            aria-label="Game speed"
-          >
-            {(Object.keys(SPEEDS) as GameSpeed[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                title={`${SPEEDS[s].label} pace`}
-                aria-label={`${SPEEDS[s].label} pace`}
-                aria-pressed={speed === s}
-                onClick={() => {
-                  clickSound();
-                  onSpeedChange(s);
-                }}
-                className={`rounded-md p-1.5 transition active:scale-95 ${
-                  speed === s
-                    ? 'bg-amber-300 text-emerald-950 shadow'
-                    : 'text-emerald-100/60 hover:text-amber-100 hover:bg-white/10'
-                }`}
-              >
-                {SPEED_ICONS[s]}
-              </button>
-            ))}
-          </div>
-
-          {/* Sound toggle */}
+      {/* Speed control */}
+      <div
+        className="flex rounded-lg border border-white/10 bg-white/5 p-0.5"
+        role="group"
+        aria-label="Game speed"
+      >
+        {(Object.keys(SPEEDS) as GameSpeed[]).map((s) => (
           <button
+            key={s}
             type="button"
-            title={soundOff ? 'Unmute sounds' : 'Mute sounds'}
-            aria-label={soundOff ? 'Unmute sounds' : 'Mute sounds'}
-            aria-pressed={!soundOff}
-            onClick={toggleMute}
-            className="rounded-lg border border-white/10 bg-white/5 p-2 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95"
+            title={`${SPEEDS[s].label} pace`}
+            aria-label={`${SPEEDS[s].label} pace`}
+            aria-pressed={speed === s}
+            onClick={() => {
+              clickSound();
+              onSpeedChange(s);
+            }}
+            className={`rounded-md transition active:scale-95 ${compact ? 'p-2.5' : 'p-1.5'} ${
+              speed === s
+                ? 'bg-amber-300 text-emerald-950 shadow'
+                : 'text-emerald-100/60 hover:text-amber-100 hover:bg-white/10'
+            }`}
           >
-            {soundOff ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            {SPEED_ICONS[s]}
           </button>
+        ))}
+      </div>
 
-          <div className="w-px h-5 bg-white/10" aria-hidden />
-          <ToolButton title="Back to table setup" label="New table" onClick={onLeave}>
-            <Layers size={14} />
-          </ToolButton>
+      {/* Sound toggle */}
+      <button
+        type="button"
+        title={soundOff ? 'Unmute sounds' : 'Mute sounds'}
+        aria-label={soundOff ? 'Unmute sounds' : 'Mute sounds'}
+        aria-pressed={!soundOff}
+        onClick={toggleMute}
+        className={`rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95 ${
+          compact ? 'p-2.5' : 'p-2'
+        }`}
+      >
+        {soundOff ? <VolumeX size={compact ? 18 : 14} /> : <Volume2 size={compact ? 18 : 14} />}
+      </button>
+
+      <div className="w-px h-5 bg-white/10 shrink-0" aria-hidden />
+      <ToolButton compact={compact} title="Back to table setup" label="New table" onClick={onLeave}>
+        <Layers size={compact ? 18 : 14} />
+      </ToolButton>
+      <Link
+        to="/"
+        title="Quit to playground"
+        aria-label="Quit to playground"
+        onClick={() => clickSound()}
+        className={`flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-emerald-100/85 transition hover:border-red-300/40 hover:bg-red-950/40 hover:text-red-200 active:scale-95 ${
+          compact ? 'p-2.5 justify-center' : 'px-2.5 py-1.5'
+        }`}
+      >
+        <LogOut size={compact ? 18 : 14} />
+        {!compact && <span className="hidden md:inline">Quit</span>}
+      </Link>
+    </>
+  );
+
+  return (
+    <div className="felt h-dvh flex flex-col overflow-hidden select-none overscroll-none">
+      {/* ── Toolbar ─────────────────────────────────────────── */}
+      <header className="shrink-0 z-30 border-b border-white/10 bg-black/40 backdrop-blur">
+        <div className="h-12 flex items-center gap-2 px-3">
           <Link
             to="/"
-            title="Quit to playground"
-            aria-label="Quit to playground"
             onClick={() => clickSound()}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-bold text-emerald-100/85 transition hover:border-red-300/40 hover:bg-red-950/40 hover:text-red-200 active:scale-95"
+            className="flex items-center gap-0.5 text-emerald-100/70 text-sm font-semibold hover:text-amber-200 whitespace-nowrap p-1 -ml-1"
           >
-            <LogOut size={14} />
-            <span className="hidden md:inline">Quit</span>
+            <ChevronLeft size={18} />
+            <span className="hidden sm:inline">Playground</span>
           </Link>
+          <div className="w-px h-5 bg-white/10" aria-hidden />
+          <h1 className="font-black text-amber-100 tracking-wide text-sm whitespace-nowrap">
+            Bhabi Thulla
+          </h1>
+          <p className="hidden xl:block text-[11px] text-emerald-100/45 whitespace-nowrap">
+            Developed by <span className="text-amber-200/80 font-semibold">Zunair Qadeer</span>
+          </p>
+
+          {/* Turn indicator + led-suit badge (header: nothing can overlap it here) */}
+          <div aria-live="polite" className="flex-1 flex justify-center items-center gap-2 min-w-0">
+            {match.phase === 'finished' ? (
+              <span className="text-emerald-100/60 text-xs font-semibold">Round over</span>
+            ) : myTurn && !paused ? (
+              <span className="animate-pulse rounded-full bg-amber-300 px-3 sm:px-4 py-1 text-emerald-950 text-xs font-black tracking-wide shadow-[0_0_16px_rgba(252,211,77,0.5)] whitespace-nowrap">
+                YOUR TURN{secondsLeft <= 10 ? ` · ${secondsLeft}s` : ''}
+              </span>
+            ) : (
+              <span className="rounded-full border border-emerald-700/60 bg-emerald-950/60 px-3 sm:px-4 py-1 text-emerald-100/80 text-xs font-semibold truncate max-w-full">
+                {paused ? 'Paused' : `${turnName}'s turn…`}
+              </span>
+            )}
+            {ledSuit && displayPlays.length > 0 && match.phase !== 'finished' && (
+              <span
+                title={`Led suit: ${ledSuit}${showingCompleted ? ' (trick complete)' : ''}`}
+                className="hidden min-[420px]:inline rounded-full border border-amber-200/30 bg-black/40 px-2.5 py-1 text-[11px] font-bold whitespace-nowrap"
+              >
+                <span className={RED_SUITS.has(ledSuit) ? 'text-red-300' : 'text-amber-100'}>
+                  {SUIT_GLYPH[ledSuit]}
+                </span>{' '}
+                <span className="text-amber-200/90 capitalize">{ledSuit}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Desktop actions */}
+          <div className="hidden md:flex items-center gap-1.5">{toolbarActions(false)}</div>
+        </div>
+
+        {/* Mobile action row — every button stays visible, thumb-sized */}
+        <div className="md:hidden flex items-center gap-1.5 px-3 pb-2.5 overflow-x-auto">
+          {toolbarActions(true)}
         </div>
       </header>
 
@@ -404,11 +455,11 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
       <div className="flex-1 min-h-0 flex">
         {/* Table scene — one continuous felt, no separate bars */}
         <main className="flex-1 min-w-0 min-h-0 relative">
-          <div className="absolute inset-0 flex items-center justify-center px-4 pt-3 pb-32">
+          <div className="absolute inset-0 flex items-center justify-center px-2 sm:px-4 pt-2 sm:pt-3 pb-32">
             <div
               className={`relative ${thullaActive ? 'table-shake' : ''}`}
               style={{
-                width: 'min(100%, calc((100dvh - 14rem) * 1.45))',
+                width: `min(100%, calc((100dvh - ${isMobileLayout ? 17.5 : 14}rem) * 1.45))`,
                 aspectRatio: '1.45 / 1',
               }}
             >
@@ -620,7 +671,7 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
                       role="option"
                       aria-selected={false}
                       className="shrink-0"
-                      style={{ marginLeft: i === 0 ? 0 : '-2.1rem', zIndex: i }}
+                      style={{ marginLeft: i === 0 ? 0 : -(HAND_CARD_W - handStep), zIndex: i }}
                     >
                       <div
                         className="deal-in"

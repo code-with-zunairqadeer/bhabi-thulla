@@ -124,3 +124,7 @@
 ::-webkit-scrollbar { height: 6px; width: 6px; }
 ::-webkit-scrollbar-thumb { background: rgba(252, 211, 77, 0.25); border-radius: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Mobile: no double-tap zoom delay on controls, no grey tap highlight. */
+button, a { touch-action: manipulation; }
+.felt { -webkit-tap-highlight-color: transparent; }
