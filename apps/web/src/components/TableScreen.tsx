@@ -197,7 +197,7 @@ export function TableScreen({ table, nickname, onLeave }: Props) {
         {/* Thulla flash */}
         {table.thullaFlash && (
           <p
-            className="thulla-flash absolute left-1/2 top-[6%] -translate-x-1/2 z-20 text-amber-200 font-black text-base sm:text-lg text-center whitespace-nowrap"
+            className="thulla-flash absolute left-1/2 top-[15%] -translate-x-1/2 z-20 text-amber-200 font-black text-sm sm:text-base text-center whitespace-nowrap bg-emerald-950/80 rounded-full px-4 py-1 border border-amber-300/40"
             role="alert"
           >
             {table.thullaFlash}
