@@ -1,5 +1,8 @@
 # Bhabi Thulla
 
+**Play it live:** https://zunair-playground.netlify.app/bhabi-thulla
+(part of [Zunair's Playground](https://zunair-playground.netlify.app) — a growing arcade of card games)
+
 A polished, responsive, real-time multiplayer **Bhabi Thulla** card game for 4–7 players.
 Friends open a public website, enter a nickname, create or join a private table, invite
 friends with a link or code, and play synchronized live matches with bots filling empty seats.
