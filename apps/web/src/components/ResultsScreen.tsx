@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Match } from '@bhabi-thulla/game-engine';
 
 interface Props {
@@ -85,7 +86,9 @@ export function ResultsScreen({ match, onRematch, onHome }: Props) {
           </button>
         </div>
 
-        <p className="text-emerald-100/40 text-xs mt-6">Developed by Zunair Qadeer</p>
+        <p className="text-emerald-100/40 text-xs mt-6">
+          Developed by Zunair Qadeer · <Link to="/" className="hover:text-amber-200">Back to the Playground</Link>
+        </p>
       </div>
     </div>
   );

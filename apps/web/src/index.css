@@ -58,6 +58,7 @@
 /* Respect users who prefer reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   .play-in, .thulla-flash { animation: none; }
+  .animate-ping, .animate-pulse { animation: none; }
   * { transition-duration: 0.01ms !important; }
 }
 
