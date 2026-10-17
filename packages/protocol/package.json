@@ -1,1 +1,1 @@
-{"name":"@bhabi-thulla/protocol","private":true,"type":"module","version":"0.1.0"}
+{"dependencies":{"zod":"^3.23.8"},"description":"Shared, validated command/event schemas and filtered view types for client and server.","devDependencies":{"typescript":"5.6.3"},"exports":{".":{"default":"./dist/index.js","types":"./dist/index.d.ts"}},"files":["dist"],"main":"./dist/index.js","name":"@bhabi-thulla/protocol","private":true,"scripts":{"build":"tsc -p tsconfig.build.json","typecheck":"tsc --noEmit"},"type":"module","types":"./dist/index.d.ts","version":"0.1.0"}

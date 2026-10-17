@@ -1,0 +1,24 @@
+# Render Blueprint for the Bhabi Thulla game server.
+# Deploy: Render Dashboard → New → Blueprint → connect
+# code-with-zunairqadeer/bhabi-thulla → this file is read automatically.
+services:
+  - type: web
+    name: bhabi-thulla-server
+    runtime: node
+    plan: free
+    branch: main
+    # Monorepo: install everything, then build engine → protocol → server.
+    buildCommand: >-
+      npm install &&
+      npm run build -w @bhabi-thulla/game-engine &&
+      npm run build -w @bhabi-thulla/protocol &&
+      npm run build -w @bhabi-thulla/server
+    startCommand: npm run start -w @bhabi-thulla/server
+    healthCheckPath: /health
+    envVars:
+      - key: CLIENT_URL
+        value: https://zunair-playground.netlify.app
+      - key: SERVER_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false # paste the Neon connection string in the dashboard after deploy
