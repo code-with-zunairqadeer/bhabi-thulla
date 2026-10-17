@@ -1,6 +1,7 @@
 /**
- * OnlineLobby — the pre-game room. Big shareable code, player list with
- * ready states, host settings (seats / pace / bot fill), ready-up and start.
+ * OnlineLobby — the pre-game room. Shareable code + invite link, player
+ * list, host settings, and one big button: the host deals whenever they
+ * want. Whoever is in the room plays; bots fill the rest. No ready-ups.
  */
 import { useState } from 'react';
 import {
@@ -13,6 +14,7 @@ import {
   Rabbit,
   Zap,
   Users,
+  Share2,
 } from 'lucide-react';
 import type { Pace } from '@bhabi-thulla/protocol';
 import { online, type OnlineSnapshot } from '../game/online';
@@ -24,16 +26,19 @@ const PACE_META: { id: Pace; label: string; icon: React.ReactNode; hint: string 
   { id: 'fast', label: 'Fast', icon: <Zap size={16} />, hint: 'Quick' },
 ];
 
+export function inviteUrl(code: string): string {
+  return `${window.location.origin}/bhabi-thulla/join/${code}`;
+}
+
 export function OnlineLobby({ snap, nickname }: { snap: OnlineSnapshot; nickname: string }) {
   const room = snap.room;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   if (!room) return null;
-  const me = room.players.find((p) => p.guestId === snap.guestId);
   const isHost = room.hostGuestId === snap.guestId;
-  const allReady = room.players.every((p) => p.ready || !p.connected);
   const botSeats = Math.max(0, room.settings.seats - room.players.length);
 
   const run = async (fn: () => Promise<void>) => {
@@ -59,6 +64,30 @@ export function OnlineLobby({ snap, nickname }: { snap: OnlineSnapshot; nickname
     window.setTimeout(() => setCopied(false), 1500);
   };
 
+  const shareInvite = async () => {
+    clickSound();
+    const url = inviteUrl(room.code);
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Bhabi Thulla',
+          text: `${room.players.find((p) => p.guestId === room.hostGuestId)?.name ?? 'A friend'} invited you to a Bhabi Thulla table!`,
+          url,
+        });
+      } catch {
+        /* user dismissed the share sheet */
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      /* clipboard unavailable */
+    }
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
+  };
+
   return (
     <div className="felt min-h-dvh flex flex-col items-center px-4 py-8 overflow-y-auto">
       <div className="w-full max-w-md">
@@ -70,26 +99,38 @@ export function OnlineLobby({ snap, nickname }: { snap: OnlineSnapshot; nickname
         </h1>
 
         {/* Room code */}
-        <button
-          type="button"
-          onClick={copyCode}
-          title="Copy room code"
-          className="w-full panel rounded-2xl p-5 mb-5 text-center transition hover:border-amber-200/40 active:scale-[0.99]"
-        >
+        <div className="panel rounded-2xl p-5 mb-4 text-center">
           <p className="text-emerald-100/60 text-xs uppercase tracking-widest mb-1">
             Share this code with your friends
           </p>
-          <p className="text-4xl font-black tracking-[0.25em] text-amber-200">{room.code}</p>
-          <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-100/60">
-            {copied ? <Check size={14} className="text-teal-300" /> : <Copy size={14} />}
-            {copied ? 'Copied!' : 'Tap to copy'}
+          <button
+            type="button"
+            onClick={copyCode}
+            title="Copy room code"
+            className="text-4xl font-black tracking-[0.25em] text-amber-200 hover:text-amber-100 transition"
+          >
+            {room.code}
+          </button>
+          <p className="mt-1 text-xs font-semibold text-emerald-100/60">
+            {copied ? 'Copied!' : 'Tap the code to copy'}
           </p>
-        </button>
+          <button
+            type="button"
+            onClick={shareInvite}
+            className="mt-3 w-full rounded-xl bg-teal-700/60 border border-teal-400/30 py-3 text-sm font-black text-teal-50 transition hover:bg-teal-600/60 active:scale-[0.99] flex items-center justify-center gap-2"
+          >
+            <Share2 size={16} />
+            {linkCopied ? 'Invite link copied!' : 'Share invite link'}
+          </button>
+          <p className="mt-2 text-[11px] text-emerald-100/40">
+            Sends a link your friends can tap to join straight in — WhatsApp, SMS, anywhere.
+          </p>
+        </div>
 
         {/* Players */}
         <div className="panel rounded-2xl p-5 mb-5">
           <h2 className="text-sm font-bold text-emerald-100/80 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Users size={15} /> Players ({room.players.length}/{room.settings.seats})
+            <Users size={15} /> At the table ({room.players.length}/{room.settings.seats})
           </h2>
           <ul className="space-y-2">
             {room.players.map((p) => (
@@ -109,15 +150,12 @@ export function OnlineLobby({ snap, nickname }: { snap: OnlineSnapshot; nickname
                       <span className="ml-2 text-[10px] font-black uppercase tracking-wider text-teal-300">you</span>
                     )}
                   </span>
-                  <span className="block text-xs text-emerald-100/50">
-                    {!p.connected ? 'reconnecting…' : p.ready ? 'ready ✓' : 'not ready'}
-                  </span>
+                  {!p.connected && (
+                    <span className="block text-xs text-emerald-100/50">reconnecting…</span>
+                  )}
                 </span>
                 {p.guestId === room.hostGuestId && (
                   <Crown size={16} className="text-amber-300 shrink-0" aria-label="Host" />
-                )}
-                {p.ready && p.connected && (
-                  <Check size={16} className="text-teal-300 shrink-0" aria-label="Ready" />
                 )}
               </li>
             ))}
@@ -208,27 +246,26 @@ export function OnlineLobby({ snap, nickname }: { snap: OnlineSnapshot; nickname
 
         {/* Actions */}
         {isHost ? (
-          <button
-            type="button"
-            disabled={busy || !allReady}
-            onClick={() => { clickSound(); void run(() => online.startMatch()); }}
-            className="w-full rounded-2xl bg-amber-300 py-4 text-lg font-black text-emerald-950 shadow-[0_0_24px_rgba(252,211,77,0.35)] transition hover:bg-amber-200 active:scale-[0.99] disabled:opacity-40 disabled:saturate-50 flex items-center justify-center gap-2"
-          >
-            <Play size={20} /> {busy ? 'Starting…' : allReady ? 'Deal the cards' : 'Waiting for ready-ups…'}
-          </button>
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => { clickSound(); void run(() => online.startMatch()); }}
+              className="w-full rounded-2xl bg-amber-300 py-4 text-lg font-black text-emerald-950 shadow-[0_0_24px_rgba(252,211,77,0.35)] transition hover:bg-amber-200 active:scale-[0.99] disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              <Play size={20} /> {busy ? 'Dealing…' : 'Deal the cards'}
+            </button>
+            <p className="mt-2 text-center text-xs text-emerald-100/50">
+              {room.players.length} player{room.players.length === 1 ? '' : 's'} in
+              {botSeats > 0 && room.settings.botFill
+                ? ` · ${botSeats} bot${botSeats === 1 ? '' : 's'} joining`
+                : ''}
+            </p>
+          </>
         ) : (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => { clickSound(); void run(() => online.setReady(!me?.ready)); }}
-            className={`w-full rounded-2xl py-4 text-lg font-black transition active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 ${
-              me?.ready
-                ? 'border border-white/15 bg-white/5 text-emerald-100/80 hover:border-amber-200/40'
-                : 'bg-amber-300 text-emerald-950 shadow-[0_0_24px_rgba(252,211,77,0.35)] hover:bg-amber-200'
-            }`}
-          >
-            <Check size={20} /> {me?.ready ? "Not ready after all" : "I'm ready!"}
-          </button>
+          <p className="w-full rounded-2xl border border-white/10 bg-white/5 py-4 text-center text-sm font-bold text-emerald-100/70">
+            Waiting for the host to deal the cards…
+          </p>
         )}
 
         <button

@@ -214,12 +214,6 @@ class OnlineClient {
     this.set({ status: 'lobby' });
   }
 
-  async setReady(ready: boolean): Promise<void> {
-    this.ensureSocket();
-    const ack = await emitAck(this.socket!, 'cmd:set-ready', { ready });
-    if (!ack.ok) throw new Error(ack.error ?? 'Could not update ready state.');
-  }
-
   async updateSettings(patch: { seats?: number; pace?: Pace; botFill?: boolean }): Promise<void> {
     this.ensureSocket();
     const ack = await emitAck(this.socket!, 'cmd:update-settings', patch);

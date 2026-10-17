@@ -3,6 +3,7 @@ import { Plus, KeyRound, Play, Bot, Wifi } from 'lucide-react';
 import { BotDifficulty } from '@bhabi-thulla/game-engine';
 import { TableConfig, SPEEDS } from '../game/useTable';
 import { clickSound, unlockAudio } from '../game/sound';
+import { loadNickname } from './JoinViaLink';
 
 interface Props {
   onStart: (config: TableConfig) => void;
@@ -16,7 +17,7 @@ type Tab = 'host' | 'join';
 
 export function HomeScreen({ onStart, onHostLive, onJoinLive, onlineBusy, onlineError }: Props) {
   const [tab, setTab] = useState<Tab>('host');
-  const [nickname, setNickname] = useState('');
+  const [nickname, setNickname] = useState(loadNickname);
   const [numSeats, setNumSeats] = useState(4);
   const [difficulty, setDifficulty] = useState<BotDifficulty>('normal');
   const [code, setCode] = useState('');

@@ -118,17 +118,6 @@ function handleCommand(
       return;
     }
 
-    case 'cmd:set-ready': {
-      const room = requireRoom(rooms, socket);
-      const player = room.players.get(guestId);
-      if (!player) throw new Error('You are not at this table.');
-      if (room.status !== 'lobby') throw new Error('The match has already started.');
-      player.ready = (payload as { ready: boolean }).ready;
-      broadcastRoom(io, rooms, room);
-      respond({ ok: true });
-      return;
-    }
-
     case 'cmd:update-settings': {
       const room = requireRoom(rooms, socket);
       if (room.hostGuestId !== guestId) throw new Error('Only the host can change settings.');
@@ -142,7 +131,6 @@ function handleCommand(
       }
       if (pace !== undefined) room.settings.pace = pace;
       if (botFill !== undefined) room.settings.botFill = botFill;
-      for (const p of room.players.values()) p.ready = false;
       broadcastRoom(io, rooms, room);
       respond({ ok: true });
       return;
@@ -153,8 +141,7 @@ function handleCommand(
       if (room.hostGuestId !== guestId) throw new Error('Only the host can start the match.');
       if (room.status !== 'lobby') throw new Error('The match has already started.');
       if (room.players.size < 1) throw new Error('Nobody is here yet.');
-      const notReady = [...room.players.values()].filter((p) => !p.ready && p.connected);
-      if (notReady.length > 0) throw new Error('Waiting for everyone to ready up.');
+      // No ready-ups: whoever is in the room plays, bots fill the rest.
       startMatch(io, rooms, room);
       respond({ ok: true });
       return;
@@ -183,7 +170,6 @@ function handleCommand(
       room.game = null;
       room.status = 'lobby';
       for (const p of room.players.values()) {
-        p.ready = false;
         p.seat = null;
       }
       broadcastRoom(io, rooms, room);

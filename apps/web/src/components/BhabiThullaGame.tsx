@@ -8,6 +8,7 @@ import { HomeScreen } from './HomeScreen';
 import { TableScreen } from './TableScreen';
 import { ResultsScreen } from './ResultsScreen';
 import { OnlineRoom, rememberRoom } from './OnlineRoom';
+import { JoinViaLink, saveNickname } from './JoinViaLink';
 import { useEffect } from 'react';
 
 type Screen = 'setup' | 'table' | 'results';
@@ -92,6 +93,7 @@ export function BhabiThullaGame() {
       try {
         unlockAudio();
         const code = await online.host(name, { seats, pace: 'relaxed', botFill: true });
+        saveNickname(name);
         rememberRoom(code, name);
         navigate(`online/${code}`);
       } catch (e) {
@@ -110,6 +112,7 @@ export function BhabiThullaGame() {
       try {
         unlockAudio();
         await online.join(name, code);
+        saveNickname(name);
         rememberRoom(code.toUpperCase(), name);
         navigate(`online/${code.toUpperCase()}`);
       } catch (e) {
@@ -124,6 +127,7 @@ export function BhabiThullaGame() {
   return (
     <Routes>
       <Route path="online/:code" element={<OnlineRoom />} />
+      <Route path="join/:code" element={<JoinViaLink />} />
       <Route
         path="*"
         element={

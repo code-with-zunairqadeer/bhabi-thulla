@@ -29,7 +29,6 @@ export function buildRoomView(room: Room, rooms: RoomManager): RoomView {
       isBot: false,
       isHost: p.guestId === room.hostGuestId,
       connected: p.connected,
-      ready: p.ready,
     }));
   return {
     code: room.code,

@@ -49,11 +49,6 @@ export const JoinRoomSchema = z.object({
 });
 export type JoinRoom = z.infer<typeof JoinRoomSchema>;
 
-export const SetReadySchema = z.object({
-  ready: z.boolean(),
-});
-export type SetReady = z.infer<typeof SetReadySchema>;
-
 export const UpdateSettingsSchema = z.object({
   seats: z.number().int().min(4).max(7).optional(),
   pace: z.enum(['relaxed', 'normal', 'fast']).optional(),
@@ -80,7 +75,6 @@ export const COMMAND_SCHEMAS = {
   'cmd:create-room': CreateRoomSchema,
   'cmd:join-room': JoinRoomSchema,
   'cmd:leave-room': EmptySchema,
-  'cmd:set-ready': SetReadySchema,
   'cmd:update-settings': UpdateSettingsSchema,
   'cmd:start-match': EmptySchema,
   'cmd:play-card': PlayCardSchema,
@@ -105,7 +99,6 @@ export interface LobbyPlayerView {
   isBot: boolean;
   isHost: boolean;
   connected: boolean;
-  ready: boolean;
 }
 
 export interface RoomSettingsView {

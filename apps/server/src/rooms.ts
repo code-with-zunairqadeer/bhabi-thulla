@@ -12,7 +12,6 @@ export interface Player {
   name: string;
   socketId: string | null;
   connected: boolean;
-  ready: boolean;
   /** Seat index once a match starts, null while in lobby. */
   seat: number | null;
   joinedAt: number;
@@ -89,7 +88,6 @@ export class RoomManager {
       name,
       socketId: null,
       connected: false,
-      ready: false,
       seat: null,
       joinedAt: Date.now(),
       lastSeen: Date.now(),
@@ -129,7 +127,6 @@ export class RoomManager {
         name,
         socketId: null,
         connected: false,
-        ready: false,
         seat: null,
         joinedAt: Date.now(),
         lastSeen: Date.now(),
@@ -168,8 +165,6 @@ export class RoomManager {
         room.hostGuestId = next.guestId;
       }
     }
-    // A lone player in the lobby is never "not ready".
-    for (const p of room.players.values()) p.ready = false;
     if (room.players.size === 0) {
       room.emptySince = Date.now();
     }
