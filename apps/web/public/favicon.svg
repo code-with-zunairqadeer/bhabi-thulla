@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="felt" cx="50%" cy="32%" r="80%">
+      <stop offset="0%" stop-color="#17805f"/>
+      <stop offset="100%" stop-color="#082a20"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#felt)"/>
+  <rect x="4.5" y="4.5" width="55" height="55" rx="11" fill="none" stroke="#f5c445" stroke-width="2.5" opacity="0.95"/>
+  <g fill="#f5c445">
+    <circle cx="24" cy="31" r="9.5"/>
+    <circle cx="40" cy="31" r="9.5"/>
+    <polygon points="32,10 17,38 47,38"/>
+    <rect x="29" y="36" width="6" height="13" rx="2.5"/>
+  </g>
+</svg>
