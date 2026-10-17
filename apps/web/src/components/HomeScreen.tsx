@@ -1,16 +1,20 @@
 import { useState } from 'react';
-import { Plus, KeyRound, Play } from 'lucide-react';
+import { Plus, KeyRound, Play, Bot, Wifi } from 'lucide-react';
 import { BotDifficulty } from '@bhabi-thulla/game-engine';
 import { TableConfig, SPEEDS } from '../game/useTable';
 import { clickSound, unlockAudio } from '../game/sound';
 
 interface Props {
   onStart: (config: TableConfig) => void;
+  onHostLive: (name: string, seats: number) => void;
+  onJoinLive: (name: string, code: string) => void;
+  onlineBusy: boolean;
+  onlineError: string | null;
 }
 
 type Tab = 'host' | 'join';
 
-export function HomeScreen({ onStart }: Props) {
+export function HomeScreen({ onStart, onHostLive, onJoinLive, onlineBusy, onlineError }: Props) {
   const [tab, setTab] = useState<Tab>('host');
   const [nickname, setNickname] = useState('');
   const [numSeats, setNumSeats] = useState(4);
@@ -31,6 +35,20 @@ export function HomeScreen({ onStart }: Props) {
     unlockAudio();
     clickSound();
     onStart({ nickname: name, numSeats, difficulty, pace: SPEEDS.relaxed });
+  };
+
+  const hostLive = () => {
+    if (!valid || onlineBusy) return;
+    unlockAudio();
+    clickSound();
+    onHostLive(name, numSeats);
+  };
+
+  const joinLive = () => {
+    if (!valid || code.length !== 6 || onlineBusy) return;
+    unlockAudio();
+    clickSound();
+    onJoinLive(name, code);
   };
 
   return (
@@ -122,7 +140,7 @@ export function HomeScreen({ onStart }: Props) {
 
             <div>
               <span className="block text-xs font-black tracking-[0.18em] uppercase text-emerald-100/70 mb-1.5">
-                Bot difficulty
+                Bot difficulty <span className="normal-case font-semibold text-emerald-100/40">(practice only)</span>
               </span>
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Difficulty">
                 {(['easy', 'normal'] as BotDifficulty[]).map((d) => (
@@ -149,12 +167,25 @@ export function HomeScreen({ onStart }: Props) {
 
             <button
               type="button"
-              disabled={!valid}
-              onClick={dealIn}
+              disabled={!valid || onlineBusy}
+              onClick={hostLive}
               className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-300 py-3 font-black text-emerald-950 text-lg tracking-wide transition hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
             >
-              <Play size={18} /> Open Match Table
+              <Wifi size={18} /> {onlineBusy ? 'Opening…' : 'Host Live Table'}
             </button>
+            <button
+              type="button"
+              disabled={!valid}
+              onClick={dealIn}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 py-2.5 font-bold text-emerald-100/75 text-sm transition hover:border-amber-200/40 hover:text-amber-100 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
+            >
+              <Bot size={16} /> Practice vs bots instead
+            </button>
+            {onlineError && (
+              <p className="text-red-200 text-xs leading-relaxed rounded-lg bg-red-950/50 border border-red-300/20 px-3 py-2">
+                {onlineError}
+              </p>
+            )}
           </div>
         ) : (
           <div className="panel rounded-2xl p-6 text-left space-y-5">
@@ -186,18 +217,19 @@ export function HomeScreen({ onStart }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => {
-                clickSound();
-                setTouched(true);
-              }}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-300 py-3 font-black text-emerald-950 text-lg tracking-wide transition hover:bg-amber-200 active:scale-[0.99]"
+              disabled={!valid || code.length !== 6 || onlineBusy}
+              onClick={joinLive}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-300 py-3 font-black text-emerald-950 text-lg tracking-wide transition hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
             >
-              <KeyRound size={18} /> Join Table
+              <KeyRound size={18} /> {onlineBusy ? 'Joining…' : 'Join Table'}
             </button>
-            {touched && (
-              <p className="text-amber-200/80 text-xs leading-relaxed rounded-lg bg-amber-950/40 border border-amber-300/20 px-3 py-2">
-                Live tables with friends arrive with the multiplayer update — the game server is
-                next on the roadmap. For now, hosting a table plays against bots.
+            {onlineError ? (
+              <p className="text-red-200 text-xs leading-relaxed rounded-lg bg-red-950/50 border border-red-300/20 px-3 py-2">
+                {onlineError}
+              </p>
+            ) : (
+              <p className="text-emerald-100/50 text-xs leading-relaxed rounded-lg bg-emerald-950/40 border border-emerald-700/30 px-3 py-2">
+                Enter the 6-letter code your friend shared. You'll land in their lobby — ready up and the host deals.
               </p>
             )}
           </div>

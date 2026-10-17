@@ -5,6 +5,7 @@ import {
   Card,
   Suit,
   TrickPlay,
+  MatchPhase,
   BotDifficulty,
   observe,
   chooseBotMove,
@@ -34,8 +35,33 @@ export interface TableConfig {
 /** Practice-table turn timer (seconds). Matches the brief's default. */
 export const TURN_SECONDS = 30;
 
+/**
+ * Structural view of a match — everything TableScreen reads. The local
+ * engine Match satisfies this, and the online adapter builds one from the
+ * server's filtered GameView (seats rotated so "me" is always seat 0).
+ */
+export interface MatchViewSeat {
+  name: string;
+  hand: Card[];
+  escaped: boolean;
+  isBot: boolean;
+}
+export interface MatchView {
+  numSeats: number;
+  phase: MatchPhase;
+  isFirstTrick: boolean;
+  bhabi: number | null;
+  seats: MatchViewSeat[];
+  trick: {
+    plays: TrickPlay[];
+    ledSuit: Suit | null;
+    leader: number;
+  } | null;
+  events: string[];
+}
+
 export interface TableState {
-  match: Match;
+  match: MatchView;
   turn: number | null;
   legalIds: Set<string>;
   secondsLeft: number;

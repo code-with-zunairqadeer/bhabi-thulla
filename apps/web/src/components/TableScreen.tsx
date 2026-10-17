@@ -31,6 +31,8 @@ interface Props {
   onSpeedChange: (s: GameSpeed) => void;
   onLeave: () => void;
   onRematch: () => void;
+  /** Online (server-driven) game: no global pause/restart/speed controls. */
+  online?: boolean;
 }
 
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
@@ -210,7 +212,7 @@ function RulesModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, onRematch }: Props) {
+export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, onRematch, online }: Props) {
   const { match, turn, legalIds, secondsLeft, paused, error, events, completedTrick } = table;
   const [rulesOpen, setRulesOpen] = useState(false);
   const [shakeId, setShakeId] = useState<string | null>(null);
@@ -313,32 +315,37 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
   // thumb-sized) for the mobile action row. Nothing hides in a menu.
   const toolbarActions = (compact: boolean) => (
     <>
-      <ToolButton
-        compact={compact}
-        title={paused ? 'Resume the game' : 'Pause the game'}
-        label={paused ? 'Resume' : 'Pause'}
-        onClick={() => table.togglePause()}
-      >
-        {paused ? <Play size={compact ? 18 : 14} /> : <Pause size={compact ? 18 : 14} />}
-      </ToolButton>
-      <ToolButton
-        compact={compact}
-        title="Restart this round with a fresh deal"
-        label="Restart"
-        onClick={onRematch}
-      >
-        <RotateCcw size={compact ? 18 : 14} />
-      </ToolButton>
+      {!online && (
+        <ToolButton
+          compact={compact}
+          title={paused ? 'Resume the game' : 'Pause the game'}
+          label={paused ? 'Resume' : 'Pause'}
+          onClick={() => table.togglePause()}
+        >
+          {paused ? <Play size={compact ? 18 : 14} /> : <Pause size={compact ? 18 : 14} />}
+        </ToolButton>
+      )}
+      {!online && (
+        <ToolButton
+          compact={compact}
+          title="Restart this round with a fresh deal"
+          label="Restart"
+          onClick={onRematch}
+        >
+          <RotateCcw size={compact ? 18 : 14} />
+        </ToolButton>
+      )}
       <ToolButton compact={compact} title="How to play" label="Rules" onClick={() => setRulesOpen(true)}>
         <BookOpen size={compact ? 18 : 14} />
       </ToolButton>
 
-      {/* Speed control */}
-      <div
-        className="flex rounded-lg border border-white/10 bg-white/5 p-0.5"
-        role="group"
-        aria-label="Game speed"
-      >
+      {/* Speed control — fixed by the room in online games */}
+      {!online && (
+        <div
+          className="flex rounded-lg border border-white/10 bg-white/5 p-0.5"
+          role="group"
+          aria-label="Game speed"
+        >
         {(Object.keys(SPEEDS) as GameSpeed[]).map((s) => (
           <button
             key={s}
@@ -359,7 +366,8 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
             {SPEED_ICONS[s]}
           </button>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Sound toggle */}
       <button
