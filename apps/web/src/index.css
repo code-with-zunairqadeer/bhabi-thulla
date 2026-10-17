@@ -128,3 +128,7 @@
 /* Mobile: no double-tap zoom delay on controls, no grey tap highlight. */
 button, a { touch-action: manipulation; }
 .felt { -webkit-tap-highlight-color: transparent; }
+
+/* Hide scrollbars on swipe strips (hand fan, toolbar) — still swipeable. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

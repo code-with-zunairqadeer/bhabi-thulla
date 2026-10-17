@@ -4,22 +4,17 @@
  * always seat 0, which is exactly what the local table assumes — the
  * approved UI renders online games pixel-identically with zero changes.
  *
- * Also mirrors the local table's behavior: completed-trick display with a
- * pace-aware wipe, card snap on every play, the cheeky Thulla sting, a live
- * turn countdown, and illegal-play toasts.
+ * The server is the source of truth for the completed trick (it holds the
+ * finished 4-card trick through the post-trick pause, then wipes it when
+ * the next turn begins). This hook also mirrors the local table's sounds,
+ * live turn countdown, and illegal-play toasts.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Card, Suit, TrickPlay } from '@bhabi-thulla/game-engine';
+import type { Card } from '@bhabi-thulla/game-engine';
 import type { GameView } from '@bhabi-thulla/protocol';
 import { online, type OnlineSnapshot } from './online';
 import { playCardSound, thullaSound } from './sound';
 import { TURN_SECONDS, type MatchView, type TableState } from './useTable';
-
-const POST_TRICK_MS: Record<string, number> = {
-  relaxed: 2200,
-  normal: 1600,
-  fast: 900,
-};
 
 /** Never rendered — opponents' hands are counts only, but the view needs the length. */
 const HIDDEN_CARD = { id: 'hidden', suit: 'spades', rank: 2 } as Card;
@@ -28,13 +23,8 @@ export function useOnlineTable(snap: OnlineSnapshot): TableState | null {
   const game = snap.game;
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(TURN_SECONDS);
-  const [completedTrick, setCompletedTrick] = useState<{
-    plays: TrickPlay[];
-    ledSuit: Suit;
-  } | null>(null);
 
   const prevGameRef = useRef<GameView | null>(null);
-  const wipeTimer = useRef<number | null>(null);
   const errorTimer = useRef<number | null>(null);
 
   const mySeat = game?.mySeat ?? 0;
@@ -47,35 +37,16 @@ export function useOnlineTable(snap: OnlineSnapshot): TableState | null {
     errorTimer.current = window.setTimeout(() => setError(null), 2600);
   }, []);
 
-  // Completed-trick display + wipe + sounds, driven by game:state diffs.
+  // Card snap on every new play + the Thulla sting, driven by state diffs.
   useEffect(() => {
     if (!game) return;
     const prev = prevGameRef.current;
-    const trick = game.trick;
-    if (wipeTimer.current) {
-      window.clearTimeout(wipeTimer.current);
-      wipeTimer.current = null;
-    }
-    if (trick && trick.plays.length > 0) {
-      setCompletedTrick(null);
-      const prevCount = prev?.trick?.plays.length ?? 0;
-      if (trick.plays.length > prevCount) playCardSound();
-    } else if (prev?.trick && prev.trick.plays.length > 0 && prev.trick.ledSuit) {
-      setCompletedTrick({
-        plays: prev.trick.plays.map((p) => ({
-          seat: rel(p.seat),
-          card: p.card as Card,
-        })),
-        ledSuit: prev.trick.ledSuit,
-      });
-      wipeTimer.current = window.setTimeout(
-        () => setCompletedTrick(null),
-        POST_TRICK_MS[game.pace] ?? 2000,
-      );
-    }
+    const count = game.trick?.plays.length ?? 0;
+    const prevCount = prev?.trick?.plays.length ?? 0;
+    if (count > prevCount) playCardSound();
     if (game.thullaFlash) window.setTimeout(() => thullaSound(), 180);
     prevGameRef.current = game;
-  }, [game, rel]);
+  }, [game]);
 
   // Turn countdown follows the server; resets when it's not our turn.
   useEffect(() => {
@@ -89,7 +60,6 @@ export function useOnlineTable(snap: OnlineSnapshot): TableState | null {
   // Clear timers on unmount.
   useEffect(() => {
     return () => {
-      if (wipeTimer.current) window.clearTimeout(wipeTimer.current);
       if (errorTimer.current) window.clearTimeout(errorTimer.current);
     };
   }, []);
@@ -132,6 +102,17 @@ export function useOnlineTable(snap: OnlineSnapshot): TableState | null {
           }
         : null,
       events: game.events,
+    };
+  }, [game, rel]);
+
+  // The server holds the finished trick through the post-trick pause and
+  // clears it when the next turn begins — rotate its seats like the live trick.
+  const completedTrick = useMemo(() => {
+    const ct = game?.completedTrick;
+    if (!ct) return null;
+    return {
+      plays: ct.plays.map((p) => ({ seat: rel(p.seat), card: p.card as Card })),
+      ledSuit: ct.ledSuit,
     };
   }, [game, rel]);
 

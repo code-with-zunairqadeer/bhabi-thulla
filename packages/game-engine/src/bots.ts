@@ -59,25 +59,51 @@ export function easyBot(obs: BotObservation, rng: () => number = Math.random): C
 /**
  * Choose a lead card.
  *
- * Breaking suit is public, so leading a suit in which a still-active opponent
- * is known void hands them the power to stop the round — and a high lead card
- * would then pick the pile up. The rule is strict: never lead into a known
- * void while any alternative exists. Suits are ranked by fewest known-void
- * opponents, then by highest card (shed danger). If every suit has a known
- * void, lead the lowest card of the least-dangerous suit so an opponent
- * likely holds higher and takes the pile instead.
+ * Breaking suit is public, so the bot knows exactly who is void where — and
+ * the seat that matters most is the next active player, who must follow
+ * first. Leading a suit the next player is known void in is an instant
+ * self-Thulla: they break at once and the lone lead card picks the pile up.
+ * Those suits are forbidden while any alternative exists.
+ *
+ * Among the playable suits, the bot prefers the fewest known voids overall.
+ * If the chosen suit has a later-player void, it leads low to bait the
+ * break — someone else's higher card then takes the pile. With no voids in
+ * play it sheds its highest card. Forced into a next-player void, it leads
+ * its lowest card and keeps its high cards for later.
  */
 function chooseLead(obs: BotObservation, plays: readonly Card[]): Card {
-  const voidCount = (suit: Suit): number =>
-    obs.handCounts.reduce(
-      (n, _, i) => n + (i !== obs.seat && !obs.escaped[i] && obs.knownVoids.has(`${i}:${suit}`) ? 1 : 0),
-      0,
-    );
-  const minVoids = Math.min(...plays.map((c) => voidCount(c.suit)));
-  const candidates = plays.filter((c) => voidCount(c.suit) === minVoids);
-  // Safest suits: shed the highest card. Every suit dangerous: lead the
-  // lowest card so an opponent likely holds higher and takes the pile.
-  return minVoids > 0 ? lowest(candidates) : highest(candidates);
+  const n = obs.handCounts.length;
+  // Next active player after the bot — the one who must follow first.
+  let next = obs.seat;
+  for (let i = 1; i <= n; i++) {
+    const s = (obs.seat + i) % n;
+    if (!obs.escaped[s]) {
+      next = s;
+      break;
+    }
+  }
+  const nextVoid = (suit: Suit): boolean => obs.knownVoids.has(`${next}:${suit}`);
+  const totalVoids = (suit: Suit): number => {
+    let c = 0;
+    for (let i = 0; i < n; i++) {
+      if (i !== obs.seat && !obs.escaped[i] && obs.knownVoids.has(`${i}:${suit}`)) c++;
+    }
+    return c;
+  };
+  const laterVoids = (suit: Suit): number => {
+    let c = 0;
+    for (let i = 0; i < n; i++) {
+      if (i !== obs.seat && i !== next && !obs.escaped[i] && obs.knownVoids.has(`${i}:${suit}`)) c++;
+    }
+    return c;
+  };
+
+  const safe = plays.filter((c) => !nextVoid(c.suit));
+  if (safe.length === 0) return lowest(plays);
+  const minVoids = Math.min(...safe.map((c) => totalVoids(c.suit)));
+  const candidates = safe.filter((c) => totalVoids(c.suit) === minVoids);
+  // Bait a later void with the lowest card; otherwise shed the highest.
+  return candidates.some((c) => laterVoids(c.suit) > 0) ? lowest(candidates) : highest(candidates);
 }
 
 /**

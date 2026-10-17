@@ -445,9 +445,12 @@ describe('known voids', () => {
     expect(normalBot(leadObs(new Set(['1:spades']))).id).toBe('A-hearts');
   });
 
-  it('normalBot leads low when every suit has a known void', () => {
+  it('normalBot never leads into the next player\'s void even when every suit has a void', () => {
+    // Seat 1 (next to act) is void in spades: leading K-spades would Thulla
+    // instantly against them. Hearts has a later void (seat 2) — the bot
+    // leads its only heart, baiting low.
     const obs = leadObs(new Set(['1:spades', '2:hearts']));
-    expect(normalBot(obs).id).toBe('K-spades'); // lower of K-spades / A-hearts
+    expect(normalBot(obs).id).toBe('A-hearts');
   });
 
   it('normalBot ignores voids of escaped players', () => {
@@ -500,6 +503,42 @@ describe('known voids', () => {
     );
     // The engine already seated the next trick; the snapshot preserves the old one.
     expect(m.trick?.plays).toHaveLength(0);
+  });
+
+  it('normalBot never leads into the next player\'s known void when it has a choice', () => {
+    // Seat 1 (next to lead) is known void in spades; seat 2 is void in clubs.
+    // Leading spades would Thulla instantly against seat 1, so the bot must
+    // avoid spades even though clubs also has a (later) void.
+    const obs: BotObservation = {
+      seat: 0,
+      ownHand: [C('K', 'spades'), C('A', 'hearts'), C('2', 'clubs')],
+      legalPlays: [C('K', 'spades'), C('A', 'hearts'), C('2', 'clubs')],
+      ledSuit: null,
+      trickPlays: [],
+      handCounts: [3, 5, 5, 5],
+      escaped: [false, false, false, false],
+      knownVoids: new Set(['1:spades', '2:clubs']),
+    };
+    const lead = normalBot(obs);
+    expect(lead.suit).not.toBe('spades');
+    expect(lead.id).toBe('A-hearts');
+  });
+
+  it('normalBot baits a later void with its lowest card', () => {
+    // Next player follows everything; seats 2 and 3 are void in clubs and
+    // hearts respectively. Both suits are equally voided, so the bot baits
+    // with its lowest card — seat 2's break then lands on a higher club.
+    const obs: BotObservation = {
+      seat: 0,
+      ownHand: [C('9', 'clubs'), C('5', 'clubs'), C('A', 'hearts')],
+      legalPlays: [C('9', 'clubs'), C('5', 'clubs'), C('A', 'hearts')],
+      ledSuit: null,
+      trickPlays: [],
+      handCounts: [3, 5, 5, 5],
+      escaped: [false, false, false, false],
+      knownVoids: new Set(['2:clubs', '3:hearts']),
+    };
+    expect(normalBot(obs).id).toBe('5-clubs');
   });
 
   it('normalBot prefers the suit with fewer known-void opponents', () => {

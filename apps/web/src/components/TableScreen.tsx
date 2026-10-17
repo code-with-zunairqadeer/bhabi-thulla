@@ -149,7 +149,7 @@ function ToolButton({
         clickSound();
         onClick();
       }}
-      className={`flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95 ${
+      className={`shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 text-xs font-bold text-emerald-100/85 transition hover:border-amber-200/40 hover:bg-white/10 hover:text-amber-100 active:scale-95 ${
         compact ? 'p-2.5 justify-center' : 'px-2.5 py-1.5'
       }`}
     >
@@ -259,13 +259,16 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
   const isMobileLayout = vw < 768;
 
   // Hand fan geometry: shrink the overlap so every card fits the viewport,
-  // however many cards pile up after Thullas.
+  // however many cards pile up after Thullas. On phones the strip becomes
+  // swipeable past a minimum step, so no card is ever cut off the screen.
   const HAND_CARD_W = 56; // CardView small width, px
   const handAvailW = Math.min(vw * 0.96, 620);
   const handStep =
     sortedHand.length <= 1
       ? HAND_CARD_W
-      : Math.min(26, Math.max(13, (handAvailW - HAND_CARD_W) / (sortedHand.length - 1)));
+      : isMobileLayout
+        ? Math.max(18, (handAvailW - HAND_CARD_W) / (sortedHand.length - 1))
+        : Math.min(26, Math.max(13, (handAvailW - HAND_CARD_W) / (sortedHand.length - 1)));
   const ledSuit = displayLedSuit;
   const mustFollow = ledSuit !== null && me.hand.some((c) => c.suit === ledSuit);
   const hint = !myTurn
@@ -342,7 +345,7 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
       {/* Speed control — fixed by the room in online games */}
       {!online && (
         <div
-          className="flex rounded-lg border border-white/10 bg-white/5 p-0.5"
+          className="shrink-0 flex rounded-lg border border-white/10 bg-white/5 p-0.5"
           role="group"
           aria-label="Game speed"
         >
@@ -453,8 +456,8 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
           <div className="hidden md:flex items-center gap-1.5">{toolbarActions(false)}</div>
         </div>
 
-        {/* Mobile action row — every button stays visible, thumb-sized */}
-        <div className="md:hidden flex items-center gap-1.5 px-3 pb-2.5 overflow-x-auto">
+        {/* Mobile action row — every button stays visible, thumb-sized, swipeable */}
+        <div className="no-scrollbar md:hidden flex items-center gap-1.5 px-3 pb-2.5 overflow-x-auto">
           {toolbarActions(true)}
         </div>
       </header>
@@ -605,8 +608,8 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
           </div>
 
           {/* ── Your hand: floating fan, part of the scene ── */}
-          <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 z-20">
-            <div className="relative flex flex-col items-center">
+          <div className="absolute bottom-2 sm:bottom-3 inset-x-0 z-20 flex justify-center">
+            <div className="relative flex flex-col items-center w-full min-w-0">
               {/* Error / illegal-move toast */}
               {error && (
                 <p
@@ -664,44 +667,82 @@ export function TableScreen({ table, nickname, speed, onSpeedChange, onLeave, on
                 </p>
               )}
 
-              {/* The fan */}
-              <div
-                className="flex justify-center items-end mt-1.5 px-2"
-                role="listbox"
-                aria-label="Your hand"
-              >
-                {sortedHand.map((c, i) => {
-                  const legal = myTurn && legalIds.has(c.id) && !paused;
-                  const rot = (i - (sortedHand.length - 1) / 2) * 4;
-                  return (
-                    <div
-                      key={c.id}
-                      role="option"
-                      aria-selected={false}
-                      className="shrink-0"
-                      style={{ marginLeft: i === 0 ? 0 : -(HAND_CARD_W - handStep), zIndex: i }}
-                    >
+              {/* The fan — swipeable straight strip on phones, fanned on desktop */}
+              {isMobileLayout ? (
+                <div
+                  className="no-scrollbar mt-1.5 w-full overflow-x-auto"
+                  role="listbox"
+                  aria-label="Your hand — swipe to see all cards"
+                >
+                  <div className="flex items-end w-max mx-auto px-5 pt-1 pb-2">
+                    {sortedHand.map((c, i) => {
+                      const legal = myTurn && legalIds.has(c.id) && !paused;
+                      return (
+                        <div
+                          key={c.id}
+                          role="option"
+                          aria-selected={false}
+                          className="shrink-0"
+                          style={{ marginLeft: i === 0 ? 0 : -(HAND_CARD_W - handStep), zIndex: i }}
+                        >
+                          <div
+                            className="deal-in"
+                            style={{ animationDelay: `${Math.min(i * 40, 500)}ms` }}
+                          >
+                            <div className={shakeId === c.id ? 'shake' : ''}>
+                              <CardView
+                                card={c}
+                                small
+                                legal={legal}
+                                dimmed={myTurn && !legalIds.has(c.id)}
+                                onClick={() => tryPlay(c.id)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="flex justify-center items-end mt-1.5 px-2"
+                  role="listbox"
+                  aria-label="Your hand"
+                >
+                  {sortedHand.map((c, i) => {
+                    const legal = myTurn && legalIds.has(c.id) && !paused;
+                    const rot = (i - (sortedHand.length - 1) / 2) * 4;
+                    return (
                       <div
-                        className="deal-in"
-                        style={{ animationDelay: `${Math.min(i * 40, 500)}ms` }}
+                        key={c.id}
+                        role="option"
+                        aria-selected={false}
+                        className="shrink-0"
+                        style={{ marginLeft: i === 0 ? 0 : -(HAND_CARD_W - handStep), zIndex: i }}
                       >
                         <div
-                          className={shakeId === c.id ? 'shake' : ''}
-                          style={{ transform: `rotate(${rot}deg)`, transformOrigin: '50% 130%' }}
+                          className="deal-in"
+                          style={{ animationDelay: `${Math.min(i * 40, 500)}ms` }}
                         >
-                          <CardView
-                            card={c}
-                            small
-                            legal={legal}
-                            dimmed={myTurn && !legalIds.has(c.id)}
-                            onClick={() => tryPlay(c.id)}
-                          />
+                          <div
+                            className={shakeId === c.id ? 'shake' : ''}
+                            style={{ transform: `rotate(${rot}deg)`, transformOrigin: '50% 130%' }}
+                          >
+                            <CardView
+                              card={c}
+                              small
+                              legal={legal}
+                              dimmed={myTurn && !legalIds.has(c.id)}
+                              onClick={() => tryPlay(c.id)}
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </main>

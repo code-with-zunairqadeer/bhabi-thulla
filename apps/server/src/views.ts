@@ -92,7 +92,12 @@ export function buildGameView(
     trick: trick
       ? { leader: trick.leader, ledSuit: trick.ledSuit, plays }
       : null,
-    completedTrick: null, // v1: clients infer trick completion from plays + turn
+    completedTrick: game.completedTrick
+      ? {
+          plays: game.completedTrick.plays.map((p) => ({ seat: p.seat, card: toDTO(p.card) })),
+          ledSuit: game.completedTrick.ledSuit,
+        }
+      : null,
     thullaFlash: opts?.thullaFlash ?? game.consumeThullaFlash(),
     events: m.events.slice(-40),
     secondsLeft:

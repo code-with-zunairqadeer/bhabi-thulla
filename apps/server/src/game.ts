@@ -14,6 +14,7 @@ import {
   chooseBotMove,
   observe,
 } from '@bhabi-thulla/game-engine';
+import type { Suit, TrickPlay } from '@bhabi-thulla/game-engine';
 import type { Pace } from '@bhabi-thulla/protocol';
 import { saveMatchResult } from './db.js';
 import type { Room, RoomManager } from './rooms.js';
@@ -45,6 +46,8 @@ export class GameController {
   private processedActions = new Set<string>();
   private timers: NodeJS.Timeout[] = [];
   private thullaFlash = false;
+  /** The trick that just completed, shown until the next trick's turn begins. */
+  private lastCompletedTrick: { plays: TrickPlay[]; ledSuit: Suit } | null = null;
   private destroyed = false;
   private over = false;
 
@@ -92,6 +95,11 @@ export class GameController {
     this.thullaFlash = false;
   }
 
+  /** The completed trick currently on display, null when the table is live. */
+  get completedTrick(): { plays: TrickPlay[]; ledSuit: Suit } | null {
+    return this.lastCompletedTrick;
+  }
+
   get isOver(): boolean {
     return this.over;
   }
@@ -111,6 +119,9 @@ export class GameController {
       const result = this.match.playCard(seat, cardId);
       this.processedActions.add(actionId);
       this.thullaFlash = result.thulla;
+      // Hold the finished trick for display; the engine has already seated
+      // the next trick, so without this the final card would never be sent.
+      this.lastCompletedTrick = result.trickComplete ? result.completedTrick : null;
       this.clearTimers();
       if (result.finished) {
         this.over = true;
@@ -133,6 +144,12 @@ export class GameController {
   private scheduleNext(): void {
     this.clearTimers();
     if (this.destroyed || this.over || this.match.phase === 'finished') return;
+    // The post-trick pause is over — wipe the finished trick so the next
+    // lead starts on empty felt, and tell everyone at once.
+    if (this.lastCompletedTrick) {
+      this.lastCompletedTrick = null;
+      this.hooks.broadcast();
+    }
     const seat = this.match.turnSeat();
     if (seat === null) return;
     const player = this.rooms.seatPlayer(this.room, seat);
