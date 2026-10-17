@@ -20,6 +20,14 @@ import { attachSockets } from './sockets.js';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const CLIENT_URL = process.env.CLIENT_URL ?? '*';
+// Comma-separated allowlist, e.g. "https://a.app,https://b.app". "*" allows all.
+const ALLOWED_ORIGINS: string[] | '*' =
+  CLIENT_URL === '*' ? '*' : CLIENT_URL.split(',').map((s) => s.trim()).filter(Boolean);
+
+function originAllowed(origin: string | undefined): boolean {
+  if (ALLOWED_ORIGINS === '*') return true;
+  return !!origin && ALLOWED_ORIGINS.includes(origin);
+}
 
 async function main(): Promise<void> {
   initSessions(process.env.SERVER_SECRET);
@@ -30,7 +38,8 @@ async function main(): Promise<void> {
 
   // CORS for the HTTP API (Socket.IO configures its own below).
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', CLIENT_URL);
+    const origin = req.headers.origin;
+    res.setHeader('Access-Control-Allow-Origin', originAllowed(origin) ? (origin ?? '*') : 'null');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     if (req.method === 'OPTIONS') {
@@ -60,7 +69,7 @@ async function main(): Promise<void> {
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
-      origin: CLIENT_URL === '*' ? true : CLIENT_URL,
+      origin: ALLOWED_ORIGINS === '*' ? true : ALLOWED_ORIGINS,
       methods: ['GET', 'POST'],
     },
     // Heartbeats keep Render's proxy from idling the socket.
