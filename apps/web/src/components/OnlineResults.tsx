@@ -52,8 +52,8 @@ export function OnlineResults({ snap, nickname }: { snap: OnlineSnapshot; nickna
         )}
 
         <div className="panel rounded-2xl p-5 text-left mb-5">
-          <h2 className="text-sm font-bold text-emerald-100/80 uppercase tracking-wider mb-3">Escape order</h2>
-          {over.escapeOrder.length === 0 ? (
+          <h2 className="text-sm font-bold text-emerald-100/80 uppercase tracking-wider mb-3">Final standings</h2>
+          {over.escapeOrder.length === 0 && over.draw ? (
             <p className="text-emerald-100/50 text-sm">No escapes recorded.</p>
           ) : (
             <ol className="space-y-1.5">
@@ -62,17 +62,19 @@ export function OnlineResults({ snap, nickname }: { snap: OnlineSnapshot; nickna
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-teal-800/80 text-teal-100 text-xs font-bold shrink-0">
                     {i + 1}
                   </span>
-                  <span className="text-amber-50 font-semibold">{name}</span>
+                  <span className="text-amber-50 font-semibold flex-1">{name}</span>
                   <span className="text-teal-300/70 text-xs">escaped ✓</span>
                 </li>
               ))}
               {!over.draw && over.bhabiName && (
-                <li className="flex items-center gap-2.5 text-sm pt-1 border-t border-emerald-800/50">
+                <li className="flex items-center gap-2.5 text-sm pt-1.5 mt-1 border-t border-emerald-800/50">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-300 text-emerald-950 text-xs font-black shrink-0">
                     B
                   </span>
-                  <span className="text-amber-100 font-semibold">{over.bhabiName}</span>
-                  <span className="text-amber-200/60 text-xs">Bhabi</span>
+                  <span className="text-amber-100 font-semibold flex-1">{over.bhabiName}</span>
+                  <span className="text-amber-200/60 text-xs">
+                    Bhabi · {over.seats.find((s) => s.name === over.bhabiName)?.cardCount ?? 0} cards
+                  </span>
                 </li>
               )}
             </ol>

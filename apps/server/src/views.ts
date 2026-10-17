@@ -107,6 +107,8 @@ export function buildGameView(
     pace: room.settings.pace,
     isFirstTrick: m.isFirstTrick,
     setAsideCount: m.setAside.length,
+    bhabi: m.bhabi,
+    draw: m.draw,
   };
 }
 
@@ -135,6 +137,7 @@ export function buildGameOver(
       name: s.name,
       isBot: s.isBot,
       escaped: s.escaped,
+      cardCount: s.hand.length,
     })),
   };
 }

@@ -37,13 +37,17 @@ export function useOnlineTable(snap: OnlineSnapshot): TableState | null {
     errorTimer.current = window.setTimeout(() => setError(null), 2600);
   }, []);
 
-  // Card snap on every new play + the Thulla sting, driven by state diffs.
+  // Card snap on every new play (including the trick-completing 4th card,
+  // which arrives via completedTrick while the live trick resets to empty)
+  // + the Thulla sting, driven by state diffs.
   useEffect(() => {
     if (!game) return;
     const prev = prevGameRef.current;
     const count = game.trick?.plays.length ?? 0;
     const prevCount = prev?.trick?.plays.length ?? 0;
-    if (count > prevCount) playCardSound();
+    const doneCount = game.completedTrick?.plays.length ?? 0;
+    const prevDoneCount = prev?.completedTrick?.plays.length ?? 0;
+    if (count > prevCount || doneCount > prevDoneCount) playCardSound();
     if (game.thullaFlash) window.setTimeout(() => thullaSound(), 180);
     prevGameRef.current = game;
   }, [game]);
@@ -81,7 +85,7 @@ export function useOnlineTable(snap: OnlineSnapshot): TableState | null {
       numSeats: game.numSeats,
       phase: game.phase,
       isFirstTrick: game.isFirstTrick,
-      bhabi: null,
+      bhabi: game.bhabi !== null ? rel(game.bhabi) : null,
       seats: ordered.map((s) => ({
         name: s.name,
         hand:

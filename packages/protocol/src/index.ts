@@ -159,6 +159,9 @@ export interface GameView {
   pace: Pace;
   isFirstTrick: boolean;
   setAsideCount: number;
+  /** Seat index of the Bhabi once finished, null otherwise. */
+  bhabi: number | null;
+  draw: boolean;
 }
 
 export interface GameOverView {
@@ -168,7 +171,7 @@ export interface GameOverView {
   youAreBhabi: boolean;
   draw: boolean;
   escapeOrder: string[];
-  seats: { seat: number; name: string; isBot: boolean; escaped: boolean }[];
+  seats: { seat: number; name: string; isBot: boolean; escaped: boolean; cardCount: number }[];
 }
 
 export interface ServerError {

@@ -160,7 +160,9 @@ class OnlineClient {
       this.set({
         game,
         status: game.phase === 'finished' ? this.snapshot.status : 'playing',
-        over: null,
+        // The server sends one last game:state right after game:over — it
+        // must not wipe the results and kick the player back to the table.
+        ...(game.phase === 'finished' ? {} : { over: null }),
       });
     });
     socket.on('game:over', (over: GameOverView) => {

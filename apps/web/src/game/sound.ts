@@ -39,6 +39,19 @@ export function unlockAudio(): void {
   if (!muted) ac();
 }
 
+// Safety net: unlock on the very first user interaction anywhere, so sounds
+// also work after paths that never passed through a gesture handler
+// (e.g. rejoining a remembered room on refresh).
+if (typeof document !== 'undefined') {
+  const firstGesture = () => {
+    unlockAudio();
+    document.removeEventListener('pointerdown', firstGesture);
+    document.removeEventListener('keydown', firstGesture);
+  };
+  document.addEventListener('pointerdown', firstGesture);
+  document.addEventListener('keydown', firstGesture);
+}
+
 function envelope(gain: GainNode, t: number, peak: number, dur: number): void {
   gain.gain.setValueAtTime(0.0001, t);
   gain.gain.exponentialRampToValueAtTime(peak, t + 0.008);

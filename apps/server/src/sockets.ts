@@ -243,6 +243,8 @@ function sendGameState(socket: Socket, room: Room, rooms: RoomManager): void {
   const game = room.game;
   if (!game) return;
   socket.emit('game:state', buildGameView(room, game, rooms, socket.data.guestId));
+  // A player rejoining after the final trick still needs the results screen.
+  if (game.isOver) socket.emit('game:over', buildGameOver(room, game, socket.data.guestId));
 }
 
 function sendGameOver(io: Server, rooms: RoomManager, room: Room): void {
